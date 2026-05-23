@@ -1,16 +1,24 @@
-import { DataSource, In } from 'typeorm';
+import { DataSource, In, IsNull } from 'typeorm';
 import { getAdminDataSource, getApplicationDataSource, getRunnerDataSource } from './datasources';
 import {
     AdminAuditLogEntity,
     AdminTemplateEntity,
     AdminUserEntity,
+    ApiAiGenerationEntity,
     ApiBusinessEntity,
     ApiBusinessUserEntity,
+    ApiPublishingLogEntity,
+    ApiSocialAccountEntity,
+    ApiSocialPostEntity,
+    ApiSocialPostMediaEntity,
     ApiSubscriptionEntity,
     ApiUserEntity,
     ApiWebsiteEntity,
     BusinessStatus,
     RunnerAgentTaskEntity,
+    SocialAccountStatus,
+    SocialPlatform,
+    SocialPostStatus,
     SubscriptionStatus,
     SubscriptionTier,
     TaskStatus,
@@ -299,6 +307,215 @@ const createApplicationClient = () => ({
             const ds = await ensureDataSourceInitialized(getApplicationDataSource());
             return ds.getRepository(ApiSubscriptionEntity).count({
                 where: args?.where?.status ? { status: args.where.status } : undefined,
+            });
+        },
+    },
+    socialAccount: {
+        findMany: async (args: {
+            where: { businessId: string; platform?: SocialPlatform; status?: SocialAccountStatus };
+        }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialAccountEntity);
+            const where: Record<string, unknown> = {
+                businessId: args.where.businessId,
+                deletedAt: IsNull(),
+            };
+            if (args.where.platform) where.platform = args.where.platform;
+            if (args.where.status) where.status = args.where.status;
+            return repo.find({ where, order: { createdAt: 'DESC' } });
+        },
+        findUnique: async (args: { where: { id: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiSocialAccountEntity).findOne({ where: { id: args.where.id } });
+        },
+        findActiveByBusinessAndPlatform: async (args: {
+            businessId: string;
+            platform: SocialPlatform;
+            externalAccountId?: string;
+        }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const where: Record<string, unknown> = {
+                businessId: args.businessId,
+                platform: args.platform,
+                deletedAt: IsNull(),
+            };
+            if (args.externalAccountId) where.externalAccountId = args.externalAccountId;
+            return ds.getRepository(ApiSocialAccountEntity).findOne({ where, order: { createdAt: 'DESC' } });
+        },
+        upsert: async (args: { data: Partial<ApiSocialAccountEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialAccountEntity);
+            if (!args.data.businessId || !args.data.platform || !args.data.externalAccountId) {
+                throw new Error('businessId, platform and externalAccountId are required');
+            }
+            const existing = await repo.findOne({
+                where: {
+                    businessId: args.data.businessId,
+                    platform: args.data.platform,
+                    externalAccountId: args.data.externalAccountId,
+                    deletedAt: IsNull(),
+                },
+            });
+            if (existing) {
+                repo.merge(existing, { ...args.data, status: args.data.status ?? SocialAccountStatus.CONNECTED });
+                return repo.save(existing);
+            }
+            const entity = repo.create({
+                ...args.data,
+                status: args.data.status ?? SocialAccountStatus.CONNECTED,
+            });
+            return repo.save(entity);
+        },
+        update: async (args: { where: { id: string }; data: Partial<ApiSocialAccountEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialAccountEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) throw new Error(`SocialAccount ${args.where.id} not found`);
+            repo.merge(existing, args.data);
+            return repo.save(existing);
+        },
+        softDelete: async (args: { where: { id: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialAccountEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) return null;
+            existing.status = SocialAccountStatus.DISCONNECTED;
+            existing.deletedAt = new Date();
+            return repo.save(existing);
+        },
+    },
+    socialPost: {
+        create: async (args: { data: Partial<ApiSocialPostEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialPostEntity);
+            return repo.save(repo.create(args.data));
+        },
+        findUnique: async (args: { where: { id: string }; include?: { media?: boolean; logs?: boolean } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const relations: string[] = [];
+            if (args.include?.media) relations.push('media');
+            if (args.include?.logs) relations.push('publishingLogs');
+            return ds.getRepository(ApiSocialPostEntity).findOne({
+                where: { id: args.where.id },
+                relations,
+            });
+        },
+        findMany: async (args: {
+            where: { businessId: string; status?: SocialPostStatus; platform?: SocialPlatform };
+            orderBy?: { createdAt?: OrderDirection; scheduledAt?: OrderDirection };
+            take?: number;
+        }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialPostEntity);
+            const where: Record<string, unknown> = {
+                businessId: args.where.businessId,
+                deletedAt: IsNull(),
+            };
+            if (args.where.status) where.status = args.where.status;
+            if (args.where.platform) where.platform = args.where.platform;
+            const order: Record<string, 'ASC' | 'DESC'> = {};
+            if (args.orderBy?.scheduledAt) {
+                order.scheduledAt = resolveOrder(args.orderBy.scheduledAt) as 'ASC' | 'DESC';
+            }
+            if (args.orderBy?.createdAt) {
+                order.createdAt = resolveOrder(args.orderBy.createdAt) as 'ASC' | 'DESC';
+            }
+            if (Object.keys(order).length === 0) order.createdAt = 'DESC';
+            return repo.find({ where, order, take: args.take, relations: ['media'] });
+        },
+        findDueForPublishing: async (args: { now: Date; limit?: number }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialPostEntity);
+            return repo
+                .createQueryBuilder('post')
+                .where('post.status = :status', { status: SocialPostStatus.SCHEDULED })
+                .andWhere('post.scheduledAt <= :now', { now: args.now })
+                .andWhere('post.deletedAt IS NULL')
+                .orderBy('post.scheduledAt', 'ASC')
+                .take(args.limit ?? 50)
+                .getMany();
+        },
+        update: async (args: { where: { id: string }; data: Partial<ApiSocialPostEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialPostEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) throw new Error(`SocialPost ${args.where.id} not found`);
+            repo.merge(existing, args.data);
+            return repo.save(existing);
+        },
+        softDelete: async (args: { where: { id: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialPostEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) return null;
+            existing.deletedAt = new Date();
+            existing.status = SocialPostStatus.CANCELLED;
+            return repo.save(existing);
+        },
+    },
+    socialPostMedia: {
+        create: async (args: { data: Partial<ApiSocialPostMediaEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialPostMediaEntity);
+            return repo.save(repo.create(args.data));
+        },
+        findManyByPost: async (args: { postId: string }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiSocialPostMediaEntity).find({
+                where: { postId: args.postId, deletedAt: IsNull() },
+                order: { position: 'ASC', createdAt: 'ASC' },
+            });
+        },
+        softDelete: async (args: { where: { id: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialPostMediaEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) return null;
+            existing.deletedAt = new Date();
+            return repo.save(existing);
+        },
+    },
+    aiGeneration: {
+        create: async (args: { data: Partial<ApiAiGenerationEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiAiGenerationEntity);
+            return repo.save(repo.create(args.data));
+        },
+        findManyByPost: async (args: { postId: string }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiAiGenerationEntity).find({
+                where: { postId: args.postId, deletedAt: IsNull() },
+                order: { createdAt: 'DESC' },
+            });
+        },
+        findManyByBusiness: async (args: { businessId: string; take?: number }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiAiGenerationEntity).find({
+                where: { businessId: args.businessId, deletedAt: IsNull() },
+                order: { createdAt: 'DESC' },
+                take: args.take ?? 50,
+            });
+        },
+    },
+    publishingLog: {
+        create: async (args: { data: Partial<ApiPublishingLogEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiPublishingLogEntity);
+            return repo.save(repo.create(args.data));
+        },
+        update: async (args: { where: { id: string }; data: Partial<ApiPublishingLogEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiPublishingLogEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) throw new Error(`PublishingLog ${args.where.id} not found`);
+            repo.merge(existing, args.data);
+            return repo.save(existing);
+        },
+        findManyByPost: async (args: { postId: string }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiPublishingLogEntity).find({
+                where: { postId: args.postId },
+                order: { createdAt: 'DESC' },
             });
         },
     },
