@@ -3,6 +3,7 @@ import { BullModule } from '@nestjs/bullmq';
 import { AgentModule } from './agent/agent.module';
 import { BusinessModule } from './business/business.module';
 import { AuthModule } from './auth/auth.module';
+import { SocialModule } from './social/social.module';
 
 /**
  * Redis connection config.
@@ -36,6 +37,7 @@ function buildRedisConnection() {
     AgentModule,
     BusinessModule,
     AuthModule,
+    SocialModule,
   ],
 })
 export class AppModule { }
