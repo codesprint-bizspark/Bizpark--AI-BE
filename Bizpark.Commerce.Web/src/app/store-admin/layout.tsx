@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useApp } from '@/context/AppContext';
 import { useRouter, usePathname } from 'next/navigation';
@@ -6,14 +6,14 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 
 const NAV = [
-  { href: '/admin', label: 'Dashboard' },
-  { href: '/admin/products', label: 'Products' },
-  { href: '/admin/categories', label: 'Categories' },
-  { href: '/admin/orders', label: 'Orders' },
-  { href: '/admin/inventory', label: 'Inventory' },
-  { href: '/admin/customers', label: 'Customers' },
-  { href: '/admin/shipping', label: 'Shipping' },
-  { href: '/admin/config', label: 'Store Config' },
+  { href: '/store-admin', label: 'Dashboard' },
+  { href: '/store-admin/products', label: 'Products' },
+  { href: '/store-admin/categories', label: 'Categories' },
+  { href: '/store-admin/orders', label: 'Orders' },
+  { href: '/store-admin/inventory', label: 'Inventory' },
+  { href: '/store-admin/customers', label: 'Customers' },
+  { href: '/store-admin/shipping', label: 'Shipping' },
+  { href: '/store-admin/config', label: 'Store Config' },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -27,7 +27,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     if (!user || user.role !== 'ADMIN') router.replace('/auth');
   }, [user, router]);
 
-  // Still loading session from localStorage — render nothing to avoid flash
+  // Still loading session from localStorage â€” render nothing to avoid flash
   if (user === null) return null;
   if (!user || user.role !== 'ADMIN') return null;
 
@@ -41,7 +41,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
         <nav className="flex-1 py-4 space-y-0.5 px-2">
           {NAV.map(({ href, label }) => {
-            const active = pathname === href || (href !== '/admin' && pathname.startsWith(href));
+            const active = pathname === href || (href !== '/store-admin' && pathname.startsWith(href));
             return (
               <Link
                 key={href}
@@ -58,7 +58,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </nav>
         <div className="px-4 py-4 border-t">
           <p className="text-xs text-gray-500 truncate">{user.email}</p>
-          <Link href="/" className="text-xs text-gray-500 hover:text-gray-700 mt-1 block">← Back to store</Link>
+          <Link href="/" className="text-xs text-gray-500 hover:text-gray-700 mt-1 block">â† Back to store</Link>
         </div>
       </aside>
 

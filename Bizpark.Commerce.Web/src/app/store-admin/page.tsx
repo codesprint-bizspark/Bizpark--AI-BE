@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { useApp } from '@/context/AppContext';
@@ -22,10 +22,10 @@ export default function AdminDashboard() {
       adminGetInventory(token, 1).catch(() => null),
     ]).then(([products, orders, cats, inv]) => {
       setStats([
-        { label: 'Total Products', value: products?.total ?? '—', href: '/admin/products' },
-        { label: 'Total Orders', value: orders?.total ?? '—', href: '/admin/orders' },
-        { label: 'Categories', value: cats?.data?.length ?? '—', href: '/admin/categories' },
-        { label: 'Inventory Items', value: inv?.total ?? '—', href: '/admin/inventory' },
+        { label: 'Total Products', value: products?.total ?? 'â€”', href: '/store-admin/products' },
+        { label: 'Total Orders', value: orders?.total ?? 'â€”', href: '/store-admin/orders' },
+        { label: 'Categories', value: cats?.data?.length ?? 'â€”', href: '/store-admin/categories' },
+        { label: 'Inventory Items', value: inv?.total ?? 'â€”', href: '/store-admin/inventory' },
       ]);
       if (orders?.data) setRecentOrders(orders.data.slice(0, 5));
     });
@@ -58,7 +58,7 @@ export default function AdminDashboard() {
       <div className="bg-white border rounded-xl overflow-hidden">
         <div className="px-6 py-4 border-b flex items-center justify-between">
           <p className="font-semibold text-gray-900">Recent Orders</p>
-          <Link href="/admin/orders" className="text-sm font-medium hover:underline" style={{ color: primary }}>View all →</Link>
+          <Link href="/store-admin/orders" className="text-sm font-medium hover:underline" style={{ color: primary }}>View all â†’</Link>
         </div>
         {recentOrders.length === 0 ? (
           <p className="text-center py-8 text-gray-400 text-sm">No orders yet</p>

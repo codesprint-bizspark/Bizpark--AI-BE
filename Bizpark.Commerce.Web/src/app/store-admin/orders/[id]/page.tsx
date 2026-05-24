@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
@@ -34,7 +34,7 @@ export default function AdminOrderDetailPage() {
 
   useEffect(() => {
     if (!token) return;
-    getOrder(id, token).then(r => setOrder(r.data)).catch(() => router.push('/admin/orders'));
+    getOrder(id, token).then(r => setOrder(r.data)).catch(() => router.push('/store-admin/orders'));
   }, [id, token, router]);
 
   const handleStatus = async (status: 'PENDING' | 'PAID' | 'FULFILLED' | 'CANCELLED') => {
