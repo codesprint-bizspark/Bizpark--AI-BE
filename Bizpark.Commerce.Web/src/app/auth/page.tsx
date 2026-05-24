@@ -33,7 +33,7 @@ export default function AuthPage() {
         login(res.access_token, res.user);
         loggedInUser = res.user;
       }
-      router.push(loggedInUser.role === 'ADMIN' ? '/admin' : '/');
+      router.push(loggedInUser.role === 'ADMIN' ? '/store-admin' : '/');
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Authentication failed');
     } finally {

@@ -64,7 +64,7 @@ export default function AdminDashboard() {
           <p className="text-center py-8 text-gray-400 text-sm">No orders yet</p>
         ) : (
           recentOrders.map(o => (
-            <Link key={o.id} href={`/admin/orders/${o.id}`} className="flex items-center px-6 py-4 border-b last:border-0 hover:bg-gray-50 transition-colors">
+            <Link key={o.id} href={`/store-admin/orders/${o.id}`} className="flex items-center px-6 py-4 border-b last:border-0 hover:bg-gray-50 transition-colors">
               <div className="flex-1">
                 <p className="text-sm font-medium text-gray-900">#{o.id.slice(0, 8).toUpperCase()}</p>
                 <p className="text-xs text-gray-500">{new Date(o.createdAt).toLocaleDateString()}</p>
