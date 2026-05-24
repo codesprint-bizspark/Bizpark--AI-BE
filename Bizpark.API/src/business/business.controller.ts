@@ -51,10 +51,11 @@ export class BusinessController {
             } catch { /* non-critical */ }
         })();
 
+        const commerceWebUrl = (process.env.COMMERCE_WEB_URL || 'http://localhost:3004').replace(/\/$/, '');
         return {
             success: true,
             message: 'Business created successfully',
-            data: { ...business, storefrontUrl: `http://localhost:3004/?tenant=${business.id}`, adminUrl: `http://localhost:3004/auth?tenant=${business.id}` },
+            data: { ...business, storefrontUrl: `${commerceWebUrl}/?tenant=${business.id}`, adminUrl: `${commerceWebUrl}/auth?tenant=${business.id}` },
             adminCredentials: { email: user.email, password: adminPassword },
         };
     }
