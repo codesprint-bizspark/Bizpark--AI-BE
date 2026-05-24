@@ -84,7 +84,7 @@ export default function AdminOrdersPage() {
                   </td>
                   <td className="px-5 py-3 text-right font-bold text-gray-900">{fmt(o.totalAmount)}</td>
                   <td className="px-5 py-3 text-right">
-                    <Link href={`/admin/orders/${o.id}`} className="text-xs px-3 py-1 border rounded-lg hover:bg-gray-50" style={{ color: primary }}>Manage</Link>
+                    <Link href={`/store-admin/orders/${o.id}`} className="text-xs px-3 py-1 border rounded-lg hover:bg-gray-50" style={{ color: primary }}>Manage</Link>
                   </td>
                 </tr>
               ))}
