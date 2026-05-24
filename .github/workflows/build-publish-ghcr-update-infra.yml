@@ -22,9 +22,43 @@ env:
   INFRA_OVERLAY_PATH: apps/bizpark/overlays/prod
 
 jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      admin: ${{ steps.filter.outputs.admin }}
+      commerce: ${{ steps.filter.outputs.commerce }}
+      commerce_web: ${{ steps.filter.outputs.commerce_web }}
+      runner: ${{ steps.filter.outputs.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'Bizpark.API/**'
+              - 'Dockerfile.api'
+              - 'Bizpark.Core/**'
+            admin:
+              - 'Bizpark.Admin/**'
+              - 'Dockerfile.admin'
+              - 'Bizpark.Core/**'
+            commerce:
+              - 'Bizpark.Commerce/**'
+              - 'Dockerfile.commerce'
+              - 'Bizpark.Core/**'
+            commerce_web:
+              - 'Bizpark.Commerce.Web/**'
+              - 'Dockerfile.commerce-web'
+            runner:
+              - 'Bizpark.Runner.Py/**'
+              - 'Dockerfile.runner'
+
   build-and-push:
     name: Build and push ${{ matrix.service }}
     runs-on: ubuntu-latest
+    needs: detect-changes
     strategy:
       fail-fast: false
       matrix:
@@ -65,8 +99,38 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Get existing digest
+        id: existing
+        run: |
+          DIGEST=$(docker buildx imagetools inspect ${{ steps.image.outputs.name }}:latest \
+            --format '{{json .Manifest}}' 2>/dev/null \
+            | python3 -c "import json,sys; d=sys.stdin.read().strip(); print(json.loads(d).get('digest','') if d else '')" \
+            2>/dev/null || echo "")
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Determine if build needed
+        id: should_build
+        run: |
+          case "${{ matrix.service }}" in
+            api)          CHANGED="${{ needs.detect-changes.outputs.api }}" ;;
+            admin)        CHANGED="${{ needs.detect-changes.outputs.admin }}" ;;
+            commerce)     CHANGED="${{ needs.detect-changes.outputs.commerce }}" ;;
+            commerce-web) CHANGED="${{ needs.detect-changes.outputs.commerce_web }}" ;;
+            runner)       CHANGED="${{ needs.detect-changes.outputs.runner }}" ;;
+          esac
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || \
+             [[ "${CHANGED}" == "true" ]] || \
+             [[ -z "${{ steps.existing.outputs.digest }}" ]]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping build — no changes in ${{ matrix.service }}, reusing ${{ steps.existing.outputs.digest }}"
+          fi
+
       - name: Build and push image
         id: build
+        if: steps.should_build.outputs.build == 'true'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -86,7 +150,12 @@ jobs:
       - name: Store image digest
         run: |
           mkdir -p image-digests
-          echo "${{ matrix.service }}=${{ steps.build.outputs.digest }}" > "image-digests/${{ matrix.service }}.env"
+          if [[ "${{ steps.should_build.outputs.build }}" == "true" ]]; then
+            DIGEST="${{ steps.build.outputs.digest }}"
+          else
+            DIGEST="${{ steps.existing.outputs.digest }}"
+          fi
+          echo "${{ matrix.service }}=${DIGEST}" > "image-digests/${{ matrix.service }}.env"
 
       - name: Upload image digest
         uses: actions/upload-artifact@v4
@@ -118,7 +187,7 @@ jobs:
 
       - name: Update prod Kustomize images
         run: |
-          python <<'PY'
+          python3 <<'PY'
           import os
           from pathlib import Path
 
