@@ -140,6 +140,10 @@ export class TikTokClient implements PlatformClient {
         };
     }
 
+    async publish(_input: PublishPostInput): Promise<PublishPostResult> {
+        throw new Error('TikTok publishing via NestJS is not yet implemented');
+    }
+
     async disconnect(accessToken: string): Promise<void> {
         try {
             await fetch(`${TT_API}/oauth/revoke/`, {
@@ -156,76 +160,4 @@ export class TikTokClient implements PlatformClient {
         }
     }
 
-    async publish(input: PublishPostInput): Promise<PublishPostResult> {
-        const video = input.media.find((m) => m.kind === 'VIDEO');
-        if (!video) {
-            throw new Error('TikTok publish requires a VIDEO media item (PULL_FROM_URL).');
-        }
-
-        const captionParts = [
-            input.caption,
-            input.cta,
-            input.hashtags.map((h) => (h.startsWith('#') ? h : `#${h}`)).join(' '),
-        ].filter(Boolean).join(' ');
-
-        const initRes = await fetch(`${TT_API}/post/publish/video/init/`, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${input.accessToken}`,
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                post_info: {
-                    title: captionParts.slice(0, 150),
-                    privacy_level: process.env.TIKTOK_DEFAULT_PRIVACY || 'SELF_ONLY',
-                    disable_duet: false,
-                    disable_comment: false,
-                    disable_stitch: false,
-                    video_cover_timestamp_ms: 1000,
-                },
-                source_info: {
-                    source: 'PULL_FROM_URL',
-                    video_url: video.url,
-                },
-            }),
-        });
-        const initBody = await initRes.json() as {
-            data?: { publish_id?: string };
-            error?: { code?: string; message?: string };
-        };
-        if (!initRes.ok || initBody.error?.code !== 'ok') {
-            throw new Error(`TikTok publish init failed: ${initBody.error?.message || initRes.status} ${JSON.stringify(initBody)}`);
-        }
-        const publishId = initBody.data?.publish_id!;
-
-        // Poll status
-        const url = await this.waitForPublishStatus(publishId, input.accessToken);
-        return {
-            externalPostId: publishId,
-            externalPostUrl: url,
-            raw: initBody as unknown as Record<string, unknown>,
-        };
-    }
-
-    private async waitForPublishStatus(publishId: string, accessToken: string, attempts = 20, delayMs = 3000): Promise<string | null> {
-        for (let i = 0; i < attempts; i += 1) {
-            const r = await fetch(`${TT_API}/post/publish/status/fetch/`, {
-                method: 'POST',
-                headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-                body: JSON.stringify({ publish_id: publishId }),
-            });
-            const body = await r.json() as {
-                data?: { status?: string; publicaly_available_post_id?: string[]; share_url?: string };
-                error?: { code?: string; message?: string };
-            };
-            const status = body.data?.status;
-            if (status === 'PUBLISH_COMPLETE') return body.data?.share_url || null;
-            if (status === 'FAILED' || status === 'EXPIRED') {
-                throw new Error(`TikTok publish ${status}: ${JSON.stringify(body)}`);
-            }
-            await new Promise((res) => setTimeout(res, delayMs));
-        }
-        // Timed out — return null URL but treat the publish_id as the externalPostId so the user can still track it.
-        return null;
-    }
 }

@@ -1,5 +1,6 @@
 import logging
 import uuid as uuid_lib
+from urllib.parse import urlparse
 
 from bullmq import Worker
 from sqlalchemy import select
@@ -9,6 +10,7 @@ from app.db.models import AgentTask, TaskStatus
 from app.db.session import async_session
 from app.agents.website_builder import run_website_builder
 from app.agents.google_review_reply import run_google_review_reply_agent
+from app.agents.social_content import run_social_content_agent
 
 logger = logging.getLogger("runner.processor")
 
@@ -51,9 +53,14 @@ async def process_agent_task(job, token=None):
                 output = await _handle_google_review_reply(input_data)
                 task.status = TaskStatus.COMPLETED
                 task.outputData = output
-            else:
+            elif task_type == "SOCIAL_MEDIA_CONTENT":
+                output = await run_social_content_agent(input_data, session)
                 task.status = TaskStatus.COMPLETED
-                task.outputData = {"message": f"{task_type} not yet implemented"}
+                task.outputData = output
+            else:
+                logger.warning(f"[AGENT] No handler for task type '{task_type}' — marking FAILED")
+                task.status = TaskStatus.FAILED
+                task.outputData = {"error": f"Task type '{task_type}' is not implemented"}
 
         except Exception as exc:
             logger.error(f"[AGENT ERROR] Task {task_id}: {exc}")
@@ -81,9 +88,6 @@ async def _handle_website_generation(input_data: dict) -> dict:
         "generatedContent": generated,
         "businessId": business.get("id"),
     }
-
-
-from urllib.parse import urlparse
 
 
 async def _handle_google_review_reply(input_data: dict) -> dict:

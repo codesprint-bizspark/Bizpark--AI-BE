@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
+import { AgentModule } from '../agent/agent.module';
 import { AuthModule } from '../auth/auth.module';
 import { SocialAccountsController } from './accounts/social-accounts.controller';
 import { SocialAccountsService } from './accounts/social-accounts.service';
@@ -17,6 +18,7 @@ import { SocialPublishingProcessor } from './publishing/social-publishing.proces
 @Module({
     imports: [
         AuthModule,
+        AgentModule,
         BullModule.registerQueue({
             name: SOCIAL_PUBLISH_QUEUE,
             defaultJobOptions: {
