@@ -141,6 +141,7 @@ const ensureEnums = async (client) => {
     'WEBSITE_GENERATION',
     'SOCIAL_MEDIA_CONTENT',
     'BLOG_POST_WRITING',
+    'GOOGLE_REVIEW_REPLY',
   ]);
   await createEnumIfMissing(client, runnerSchema, 'TaskStatus', [
     'QUEUED',
@@ -251,6 +252,52 @@ CREATE TABLE IF NOT EXISTS ${quoteIdent(appSchema)}.${quoteIdent('Subscription')
     `FK_${appSchema}_Subscription_businessId`,
     `FOREIGN KEY ("businessId") REFERENCES ${quoteIdent(appSchema)}.${quoteIdent('businesses')}("id") ON DELETE CASCADE`,
   );
+
+  await client.query(`
+CREATE TABLE IF NOT EXISTS ${quoteIdent(appSchema)}.${quoteIdent('GoogleBusinessConnection')} (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "createdAt" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "businessId" uuid NOT NULL,
+  "provider" varchar(32) NOT NULL DEFAULT 'mock',
+  "googleAccountName" text,
+  "locationName" text,
+  "locationTitle" varchar(255),
+  "address" text,
+  "encryptedRefreshToken" text,
+  "scopes" jsonb NOT NULL DEFAULT '[]'::jsonb,
+  "lastSyncedAt" timestamptz,
+  "status" varchar(32) NOT NULL DEFAULT 'CONNECTED'
+)`);
+  await client.query(`
+CREATE INDEX IF NOT EXISTS ${quoteIdent(`IDX_${appSchema}_GoogleBusinessConnection_businessId`)}
+  ON ${quoteIdent(appSchema)}.${quoteIdent('GoogleBusinessConnection')} ("businessId")`);
+
+  await client.query(`
+CREATE TABLE IF NOT EXISTS ${quoteIdent(appSchema)}.${quoteIdent('GoogleBusinessReview')} (
+  "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  "createdAt" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" timestamptz NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "businessId" uuid NOT NULL,
+  "locationName" text NOT NULL,
+  "reviewName" text NOT NULL UNIQUE,
+  "reviewId" varchar(255) NOT NULL,
+  "reviewerDisplayName" varchar(255),
+  "reviewerIsAnonymous" boolean NOT NULL DEFAULT false,
+  "rating" int NOT NULL,
+  "comment" text,
+  "reviewCreateTime" timestamptz,
+  "reviewUpdateTime" timestamptz,
+  "googleReply" text,
+  "aiReply" text,
+  "status" varchar(32) NOT NULL DEFAULT 'SYNCED',
+  "agentTaskId" uuid,
+  "failureReason" text,
+  "repliedAt" timestamptz
+)`);
+  await client.query(`
+CREATE INDEX IF NOT EXISTS ${quoteIdent(`IDX_${appSchema}_GoogleBusinessReview_businessId`)}
+  ON ${quoteIdent(appSchema)}.${quoteIdent('GoogleBusinessReview')} ("businessId")`);
 
   // Compatibility for legacy API paths still reading these tables.
   await client.query(`

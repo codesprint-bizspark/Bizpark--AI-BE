@@ -59,6 +59,7 @@ export const TaskType = {
     WEBSITE_GENERATION: 'WEBSITE_GENERATION',
     SOCIAL_MEDIA_CONTENT: 'SOCIAL_MEDIA_CONTENT',
     BLOG_POST_WRITING: 'BLOG_POST_WRITING',
+    GOOGLE_REVIEW_REPLY: 'GOOGLE_REVIEW_REPLY',
 } as const;
 export type TaskType = (typeof TaskType)[keyof typeof TaskType];
 

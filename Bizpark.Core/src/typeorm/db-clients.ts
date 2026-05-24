@@ -12,6 +12,8 @@ import {
     ApiSocialPostEntity,
     ApiSocialPostMediaEntity,
     ApiSubscriptionEntity,
+    ApiGoogleBusinessConnectionEntity,
+    ApiGoogleBusinessReviewEntity,
     ApiUserEntity,
     ApiWebsiteEntity,
     BusinessStatus,
@@ -517,6 +519,82 @@ const createApplicationClient = () => ({
                 where: { postId: args.postId },
                 order: { createdAt: 'DESC' },
             });
+        },
+    },
+    googleBusinessConnection: {
+        findFirst: async (args: { where: { businessId: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiGoogleBusinessConnectionEntity);
+            return repo.findOne({ where: { businessId: args.where.businessId } });
+        },
+        upsertByBusinessId: async (args: {
+            businessId: string;
+            create: Partial<ApiGoogleBusinessConnectionEntity>;
+            update: Partial<ApiGoogleBusinessConnectionEntity>;
+        }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiGoogleBusinessConnectionEntity);
+            const existing = await repo.findOne({ where: { businessId: args.businessId } });
+            if (existing) {
+                repo.merge(existing, args.update);
+                return repo.save(existing);
+            }
+            return repo.save(repo.create({ ...args.create, businessId: args.businessId }));
+        },
+    },
+    googleBusinessReview: {
+        findMany: async (args: {
+            where?: { businessId?: string; status?: string; agentTaskId?: string };
+            orderBy?: { reviewCreateTime?: OrderDirection; createdAt?: OrderDirection };
+        }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiGoogleBusinessReviewEntity);
+            const where: Record<string, unknown> = {};
+            if (args.where?.businessId) where.businessId = args.where.businessId;
+            if (args.where?.status) where.status = args.where.status;
+            if (args.where?.agentTaskId) where.agentTaskId = args.where.agentTaskId;
+
+            const order: Record<string, 'ASC' | 'DESC'> = {};
+            const reviewOrder = resolveOrder(args.orderBy?.reviewCreateTime);
+            const createdOrder = resolveOrder(args.orderBy?.createdAt);
+            if (reviewOrder) order.reviewCreateTime = reviewOrder as 'ASC' | 'DESC';
+            if (createdOrder) order.createdAt = createdOrder as 'ASC' | 'DESC';
+
+            return repo.find({
+                where: Object.keys(where).length ? where : undefined,
+                order: Object.keys(order).length ? order : undefined,
+            });
+        },
+        findUnique: async (args: { where: { id?: string; reviewName?: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiGoogleBusinessReviewEntity);
+            if (args.where.id) return repo.findOne({ where: { id: args.where.id } });
+            if (args.where.reviewName) return repo.findOne({ where: { reviewName: args.where.reviewName } });
+            return null;
+        },
+        upsertByReviewName: async (args: {
+            reviewName: string;
+            create: Partial<ApiGoogleBusinessReviewEntity>;
+            update: Partial<ApiGoogleBusinessReviewEntity>;
+        }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiGoogleBusinessReviewEntity);
+            const existing = await repo.findOne({ where: { reviewName: args.reviewName } });
+            if (existing) {
+                repo.merge(existing, args.update);
+                return repo.save(existing);
+            }
+            return repo.save(repo.create({ ...args.create, reviewName: args.reviewName }));
+        },
+        update: async (args: { where: { id: string }; data: Partial<ApiGoogleBusinessReviewEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiGoogleBusinessReviewEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) {
+                throw new Error(`Google review ${args.where.id} not found`);
+            }
+            repo.merge(existing, args.data);
+            return repo.save(existing);
         },
     },
     $disconnect: async () => {

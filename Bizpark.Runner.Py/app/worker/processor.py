@@ -8,6 +8,7 @@ from app.config import settings
 from app.db.models import AgentTask, TaskStatus
 from app.db.session import async_session
 from app.agents.website_builder import run_website_builder
+from app.agents.google_review_reply import run_google_review_reply_agent
 
 logger = logging.getLogger("runner.processor")
 
@@ -46,6 +47,10 @@ async def process_agent_task(job, token=None):
                 output = await _handle_website_generation(input_data)
                 task.status = TaskStatus.PENDING_APPROVAL
                 task.outputData = output
+            elif task_type == "GOOGLE_REVIEW_REPLY":
+                output = await _handle_google_review_reply(input_data)
+                task.status = TaskStatus.COMPLETED
+                task.outputData = output
             else:
                 task.status = TaskStatus.COMPLETED
                 task.outputData = {"message": f"{task_type} not yet implemented"}
@@ -79,6 +84,19 @@ async def _handle_website_generation(input_data: dict) -> dict:
 
 
 from urllib.parse import urlparse
+
+
+async def _handle_google_review_reply(input_data: dict) -> dict:
+    business = input_data.get("business", {})
+    review = input_data.get("review", {})
+    policy = input_data.get("policy", {})
+
+    return await run_google_review_reply_agent(
+        business=business,
+        review=review,
+        policy=policy,
+    )
+
 
 async def start_worker():
     # Parse the Redis URL manually for BullMQ which expects a dictionary
