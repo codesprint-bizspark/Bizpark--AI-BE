@@ -1,21 +1,75 @@
 import json
 import logging
-from typing import TypedDict, Optional
+import re
+from typing import TypedDict, Optional, List, Literal
 
 from langchain_openai import ChatOpenAI
 from langgraph.graph import StateGraph, END
+from pydantic import BaseModel, ValidationError
 
 from app.config import settings
 
+
+# ── Output schema ─────────────────────────────────────────────────────────────
+
+class _FeatureItem(BaseModel):
+    icon: Literal["truck", "refresh", "shield", "headphones", "sparkles"]
+    title: str
+    description: str
+
+class _HeroContent(BaseModel):
+    title: str
+    subtitle: str
+    ctaText: str
+    ctaLink: str = "/shop"
+
+class _AnnouncementContent(BaseModel):
+    enabled: bool = True
+    text: str
+
+class _AboutContent(BaseModel):
+    title: str
+    text: str
+
+class _FooterContent(BaseModel):
+    contactEmail: str
+
+class _SeoContent(BaseModel):
+    metaDescription: str
+    keywords: str
+
+class _WebsiteContent(BaseModel):
+    announcement: _AnnouncementContent
+    hero: _HeroContent
+    features: List[_FeatureItem]
+    about: _AboutContent
+    footer: _FooterContent
+    seo: _SeoContent
+
+class WebsiteGenerationOutput(BaseModel):
+    businessName: str
+    tagline: str
+    primaryColor: str
+    secondaryColor: str
+    content: _WebsiteContent
+
 logger = logging.getLogger("runner.agents.website_builder")
 
-# Instantiate once at module load — avoid per-call overhead
-_llm = ChatOpenAI(
-    model="gpt-4o",
-    api_key=settings.openai_api_key,
-    temperature=0.4,
-    model_kwargs={"response_format": {"type": "json_object"}},
-)
+_llm: Optional[ChatOpenAI] = None
+
+
+def _get_llm() -> ChatOpenAI:
+    global _llm
+    if _llm is None:
+        if not settings.openai_api_key:
+            raise RuntimeError("OPENAI_API_KEY is not set — cannot run website builder agent")
+        _llm = ChatOpenAI(
+            model="gpt-4o",
+            api_key=settings.openai_api_key,
+            temperature=0.4,
+            model_kwargs={"response_format": {"type": "json_object"}},
+        )
+    return _llm
 
 
 class WebsiteState(TypedDict):
@@ -119,17 +173,19 @@ Return ONLY a valid JSON object — no markdown, no explanation, no extra text:
 }}"""
 
     try:
-        response = _llm.invoke(prompt)
+        response = _get_llm().invoke(prompt)
         raw_text = response.content.strip()
 
-        # Fallback strip in case model ignores mime type
-        if raw_text.startswith("```"):
-            raw_text = raw_text.split("```")[1]
-            if raw_text.startswith("json"):
-                raw_text = raw_text[4:]
-            raw_text = raw_text.strip()
+        # Fallback strip in case model ignores json_object mime type
+        raw_text = re.sub(r"^```(?:json)?\s*\n?", "", raw_text, flags=re.IGNORECASE)
+        raw_text = re.sub(r"\n?```\s*$", "", raw_text.strip()).strip()
 
         generated = json.loads(raw_text)
+        try:
+            WebsiteGenerationOutput.model_validate(generated)
+        except ValidationError as ve:
+            logger.error(f"Website builder output failed schema validation: {ve}")
+            return {**state, "error": f"AI output did not match expected schema: {ve}"}
         logger.info(f"OpenAI generated full config for {business_name}")
         return {**state, "generated_content": generated}
 

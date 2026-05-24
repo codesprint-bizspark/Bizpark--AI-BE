@@ -1,5 +1,22 @@
 import { SocialPlatform } from 'bizpark.core';
 
+export type PublishPostInput = {
+    accessToken: string;
+    externalPageId?: string | null;
+    externalAccountId: string;
+    caption: string;
+    hashtags?: string[];
+    cta?: string | null;
+    media?: Array<{ kind: string; url: string; mimeType?: string | null }>;
+    aiMetadata?: unknown;
+};
+
+export type PublishPostResult = {
+    externalPostId: string;
+    externalPostUrl: string | null;
+    raw: unknown;
+};
+
 export type OAuthExchangeResult = {
     /** Long-lived access token (or whatever the platform returns). */
     accessToken: string;
@@ -17,30 +34,6 @@ export type OAuthExchangeResult = {
     metadata?: Record<string, unknown>;
 };
 
-export type PublishMediaInput = {
-    kind: 'IMAGE' | 'VIDEO' | 'THUMBNAIL';
-    url: string;
-    mimeType?: string | null;
-};
-
-export type PublishPostInput = {
-    accessToken: string;
-    externalPageId: string | null;
-    externalAccountId: string;
-    caption: string;
-    hashtags: string[];
-    cta?: string | null;
-    media: PublishMediaInput[];
-    /** Free-form additional fields, eg flyer prompt / video script. */
-    aiMetadata?: Record<string, unknown> | null;
-};
-
-export type PublishPostResult = {
-    externalPostId: string;
-    externalPostUrl?: string | null;
-    raw: Record<string, unknown>;
-};
-
 export interface PlatformClient {
     readonly platform: SocialPlatform;
 
@@ -56,6 +49,6 @@ export interface PlatformClient {
     /** Best-effort: revoke / disconnect at the platform level. */
     disconnect(accessToken: string): Promise<void>;
 
-    /** Publish the prepared post. Throws on failure (worker retries handle backoff). */
+    /** Publish a post to the platform. */
     publish(input: PublishPostInput): Promise<PublishPostResult>;
 }
