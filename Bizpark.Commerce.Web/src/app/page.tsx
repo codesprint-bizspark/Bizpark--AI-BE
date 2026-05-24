@@ -1,3 +1,4 @@
+// commerce storefront entry
 import { cookies } from 'next/headers';
 import { getWebsiteConfig, getProducts } from '@/lib/api';
 import HomeClient from './HomeClient';
