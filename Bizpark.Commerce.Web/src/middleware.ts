@@ -54,7 +54,7 @@ export default function middleware(request: NextRequest) {
     path: '/',
     maxAge: 60 * 60 * 24 * 7, // 1 week
     sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
+    secure: process.env.SECURE_COOKIE === 'true',
   });
 
   return response;
