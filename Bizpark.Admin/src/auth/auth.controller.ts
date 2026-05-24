@@ -27,7 +27,7 @@ export class AuthController {
       response.cookie('admin_token', session.token, {
         httpOnly: true,
         sameSite: 'lax',
-        secure: process.env.NODE_ENV === 'production',
+        secure: process.env.SECURE_COOKIE === 'true',
         maxAge: 8 * 60 * 60 * 1000,
       });
       return response.redirect('/admin');
