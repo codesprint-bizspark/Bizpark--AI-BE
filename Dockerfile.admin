@@ -34,6 +34,8 @@ COPY --from=builder /app/Bizpark.Core/node_modules ./Bizpark.Core/node_modules
 COPY --from=builder /app/Bizpark.Admin/package*.json ./Bizpark.Admin/
 COPY --from=builder /app/Bizpark.Admin/dist ./Bizpark.Admin/dist
 COPY --from=builder /app/Bizpark.Admin/node_modules ./Bizpark.Admin/node_modules
+COPY --from=builder /app/Bizpark.Admin/views ./Bizpark.Admin/views
+COPY --from=builder /app/Bizpark.Admin/public ./Bizpark.Admin/public
 
 WORKDIR /app/Bizpark.Admin
 
