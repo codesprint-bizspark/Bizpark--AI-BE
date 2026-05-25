@@ -11,6 +11,7 @@ from app.db.session import async_session
 from app.agents.website_builder import run_website_builder
 from app.agents.google_review_reply import run_google_review_reply_agent
 from app.agents.social_content import run_social_content_agent
+from app.agents.mobile_app_builder import run_mobile_app_builder
 
 logger = logging.getLogger("runner.processor")
 
@@ -47,6 +48,10 @@ async def process_agent_task(job, token=None):
         try:
             if task_type == "WEBSITE_GENERATION":
                 output = await _handle_website_generation(input_data)
+                task.status = TaskStatus.PENDING_APPROVAL
+                task.outputData = output
+            elif task_type == "MOBILE_APP_GENERATION":
+                output = await _handle_mobile_app_generation(input_data)
                 task.status = TaskStatus.PENDING_APPROVAL
                 task.outputData = output
             elif task_type == "GOOGLE_REVIEW_REPLY":
@@ -100,6 +105,21 @@ async def _handle_google_review_reply(input_data: dict) -> dict:
         review=review,
         policy=policy,
     )
+
+
+async def _handle_mobile_app_generation(input_data: dict) -> dict:
+    business = input_data.get("business", {})
+    tone = input_data.get("tone", "professional")
+
+    generated = await run_mobile_app_builder(
+        business=business,
+        tone=tone,
+    )
+
+    return {
+        "generatedContent": generated,
+        "businessId": business.get("id"),
+    }
 
 
 async def start_worker():

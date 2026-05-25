@@ -7,6 +7,7 @@ import {
     ApiAiGenerationEntity,
     ApiBusinessEntity,
     ApiBusinessUserEntity,
+    ApiMobileAppEntity,
     ApiPublishingLogEntity,
     ApiSocialAccountEntity,
     ApiSocialPostEntity,
@@ -17,6 +18,7 @@ import {
     ApiUserEntity,
     ApiWebsiteEntity,
     BusinessStatus,
+    MobileAppStatus,
     RunnerAgentTaskEntity,
     SocialAccountStatus,
     SocialPlatform,
@@ -268,6 +270,51 @@ const createApplicationClient = () => ({
         count: async (args?: { where?: { status?: WebsiteStatus } }) => {
             const ds = await ensureDataSourceInitialized(getApplicationDataSource());
             return ds.getRepository(ApiWebsiteEntity).count({
+                where: args?.where?.status ? { status: args.where.status } : undefined,
+            });
+        },
+    },
+    mobileApp: {
+        findFirstByBusinessId: async (args: { businessId: string }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiMobileAppEntity).findOne({
+                where: { businessId: args.businessId },
+                relations: ['business'],
+                order: { createdAt: 'DESC' },
+            });
+        },
+        upsert: async (args: {
+            where: { businessId: string };
+            update: Partial<ApiMobileAppEntity>;
+            create: Partial<ApiMobileAppEntity>;
+        }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiMobileAppEntity);
+            const existing = await repo.findOne({ where: { businessId: args.where.businessId } });
+            if (existing) {
+                repo.merge(existing, args.update);
+                return repo.save(existing);
+            }
+            const created = repo.create({
+                ...args.create,
+                businessId: args.where.businessId,
+                status: args.create.status ?? MobileAppStatus.DRAFT,
+            });
+            return repo.save(created);
+        },
+        update: async (args: { where: { id: string }; data: Partial<ApiMobileAppEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiMobileAppEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) {
+                throw new Error(`MobileApp ${args.where.id} not found`);
+            }
+            repo.merge(existing, args.data);
+            return repo.save(existing);
+        },
+        count: async (args?: { where?: { status?: MobileAppStatus } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiMobileAppEntity).count({
                 where: args?.where?.status ? { status: args.where.status } : undefined,
             });
         },

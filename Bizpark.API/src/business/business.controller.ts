@@ -1,6 +1,6 @@
-﻿import { Controller, Get, Post, Body, Param, UseGuards, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Body, Param, UseGuards, BadRequestException } from '@nestjs/common';
 import { BusinessService } from './business.service';
-import { applicationDb, CreateBusinessDto, SaveWebsiteConfigDto, WebsiteStatus } from 'bizpark.core';
+import { applicationDb, CreateBusinessDto, SaveWebsiteConfigDto, WebsiteStatus, MobileAppStatus } from 'bizpark.core';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AgentService } from '../agent/agent.service';
@@ -146,5 +146,63 @@ export class BusinessController {
             message: 'Website build queued',
             data: queuedTask
         };
+    }
+
+    @Post(':id/mobile-app')
+    async saveMobileAppConfig(
+        @Param('id') id: string,
+        @Body() body: { primaryColor?: string },
+        @CurrentUser() user: any
+    ): Promise<any> {
+        const businesses = await this.businessService.getBusinessesForUser(user.id);
+        if (!businesses.find(b => b.id === id)) throw new Error('Unauthorized');
+
+        const mobileApp = await applicationDb.mobileApp.upsert({
+            where: { businessId: id },
+            update: { status: MobileAppStatus.DRAFT },
+            create: {
+                businessId: id,
+                status: MobileAppStatus.DRAFT,
+                cmsData: body.primaryColor ? { 'brand.primaryColor': body.primaryColor } : {},
+            },
+        });
+        return { success: true, message: 'Mobile app configuration saved', data: mobileApp };
+    }
+
+    @Post(':id/mobile-app/deploy')
+    async deployMobileApp(
+        @Param('id') id: string,
+        @Body() body: { tone?: string; primaryColor?: string },
+        @CurrentUser() user: any
+    ): Promise<any> {
+        const businesses = await this.businessService.getBusinessesForUser(user.id);
+        if (!businesses.find(b => b.id === id)) throw new Error('Unauthorized');
+
+        const business = await this.businessService.getBusinessById(id);
+
+        // Ensure a MobileApp record exists before we queue
+        const mobileApp = await applicationDb.mobileApp.upsert({
+            where: { businessId: id },
+            update: { status: MobileAppStatus.GENERATING },
+            create: { businessId: id, status: MobileAppStatus.GENERATING },
+        });
+
+        const queuedTask = await this.agentService.queueTask({
+            businessId: id,
+            taskType: 'MOBILE_APP_GENERATION',
+            inputData: {
+                business: {
+                    id: business.id,
+                    name: business.name,
+                    category: (business as any).category,
+                    description: (business as any).description,
+                    logoUrl: (business as any).logoUrl,
+                },
+                mobileAppConfig: { cmsData: (mobileApp as any).cmsData || {} },
+                tone: body?.tone || 'professional',
+            },
+        });
+
+        return { success: true, message: 'Mobile app build queued', data: queuedTask };
     }
 }

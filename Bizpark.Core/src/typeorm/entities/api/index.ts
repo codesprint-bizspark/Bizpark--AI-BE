@@ -5,6 +5,7 @@ import { ApiGoogleBusinessConnectionEntity } from './google-business-connection.
 import { ApiGoogleBusinessReviewEntity } from './google-business-review.entity';
 import { ApiUserEntity } from './user.entity';
 import { ApiWebsiteEntity } from './website.entity';
+import { ApiMobileAppEntity } from './mobile-app.entity';
 import { ApiSocialAccountEntity } from './social-account.entity';
 import { ApiSocialPostEntity } from './social-post.entity';
 import { ApiSocialPostMediaEntity } from './social-post-media.entity';
@@ -16,6 +17,7 @@ export const API_ENTITIES = [
     ApiBusinessEntity,
     ApiBusinessUserEntity,
     ApiWebsiteEntity,
+    ApiMobileAppEntity,
     ApiSubscriptionEntity,
     ApiSocialAccountEntity,
     ApiSocialPostEntity,
@@ -33,6 +35,7 @@ export * from './google-business-connection.entity';
 export * from './google-business-review.entity';
 export * from './user.entity';
 export * from './website.entity';
+export * from './mobile-app.entity';
 export * from './social-account.entity';
 export * from './social-post.entity';
 export * from './social-post-media.entity';
