@@ -461,6 +461,12 @@ const createApplicationClient = () => ({
             const repo = ds.getRepository(ApiSocialPostMediaEntity);
             return repo.save(repo.create(args.data));
         },
+        findUnique: async (args: { where: { id: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiSocialPostMediaEntity).findOne({
+                where: { id: args.where.id },
+            });
+        },
         findManyByPost: async (args: { postId: string }) => {
             const ds = await ensureDataSourceInitialized(getApplicationDataSource());
             return ds.getRepository(ApiSocialPostMediaEntity).find({
