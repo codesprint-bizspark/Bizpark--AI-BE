@@ -10,6 +10,7 @@ import { ApiSocialPostEntity } from './social-post.entity';
 import { ApiSocialPostMediaEntity } from './social-post-media.entity';
 import { ApiAiGenerationEntity } from './ai-generation.entity';
 import { ApiPublishingLogEntity } from './publishing-log.entity';
+import { ApiMcpApiKeyEntity } from './mcp-api-key.entity';
 
 export const API_ENTITIES = [
     ApiUserEntity,
@@ -24,6 +25,7 @@ export const API_ENTITIES = [
     ApiPublishingLogEntity,
     ApiGoogleBusinessConnectionEntity,
     ApiGoogleBusinessReviewEntity,
+    ApiMcpApiKeyEntity,
 ];
 
 export * from './business.entity';
@@ -38,3 +40,4 @@ export * from './social-post.entity';
 export * from './social-post-media.entity';
 export * from './ai-generation.entity';
 export * from './publishing-log.entity';
+export * from './mcp-api-key.entity';
