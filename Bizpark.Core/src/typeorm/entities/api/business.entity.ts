@@ -3,6 +3,7 @@ import { BaseEntityWithTimestamps, BusinessStatus, SubscriptionTier } from '../s
 import { ApiBusinessUserEntity } from './business-user.entity';
 import { ApiSubscriptionEntity } from './subscription.entity';
 import { ApiWebsiteEntity } from './website.entity';
+import { ApiMobileAppEntity } from './mobile-app.entity';
 
 @Entity({ name: 'businesses' })
 export class ApiBusinessEntity extends BaseEntityWithTimestamps {
@@ -39,6 +40,9 @@ export class ApiBusinessEntity extends BaseEntityWithTimestamps {
 
     @OneToMany(() => ApiWebsiteEntity, (website) => website.business)
     websites!: ApiWebsiteEntity[];
+
+    @OneToMany(() => ApiMobileAppEntity, (mobileApp) => mobileApp.business)
+    mobileApps!: ApiMobileAppEntity[];
 
     @OneToMany(() => ApiSubscriptionEntity, (subscription) => subscription.business)
     subscriptions!: ApiSubscriptionEntity[];

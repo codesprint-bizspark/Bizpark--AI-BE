@@ -12,6 +12,7 @@ import { InventoryModule } from './inventory/inventory.module';
 import { OrdersModule } from './orders/orders.module';
 import { PaymentsModule } from './payments/payments.module';
 import { WebsiteConfigModule } from './website-config/website-config.module';
+import { MobileAppConfigModule } from './mobile-app-config/mobile-app-config.module';
 import { COMMERCE_JOBS_QUEUE } from './queues/queue.constants';
 import { ShippingModule } from './shipping/shipping.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
@@ -47,6 +48,7 @@ const redisPort = Number(process.env.REDIS_PORT || 6379);
     SubscriptionsModule,
     PaymentsModule,
     WebsiteConfigModule,
+    MobileAppConfigModule,
   ],
   controllers: [AppController],
   providers: [AppService],
