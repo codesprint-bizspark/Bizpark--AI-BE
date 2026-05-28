@@ -13,10 +13,11 @@ import { SOCIAL_PUBLISH_QUEUE, SocialPublishJob } from './social-publishing.serv
 
 /**
  * BullMQ worker for social publishing.
+ * Uses Node.js fetch() via the platform clients — runs entirely in NestJS,
+ * no Python Runner involvement.
  *
  * Per-job lifecycle:
- *   1. Mark post as PUBLISHING (the API service does this for `publish-now`;
- *      we do it here for scheduled posts that were already SCHEDULED).
+ *   1. Mark post as PUBLISHING.
  *   2. Open a PublishingLog row in PENDING.
  *   3. Resolve account + decrypted access token (refreshing if needed).
  *   4. Fetch media list and pass through to the platform client.
@@ -50,7 +51,6 @@ export class SocialPublishingProcessor extends WorkerHost {
             return { skipped: true };
         }
 
-        // Ensure post is marked publishing (e.g. scheduled path).
         if (post.status !== SocialPostStatus.PUBLISHING) {
             await applicationDb.socialPost.update({
                 where: { id: post.id },
@@ -95,7 +95,7 @@ export class SocialPublishingProcessor extends WorkerHost {
                     status: PublishingLogStatus.SUCCESS,
                     externalPostId: result.externalPostId,
                     externalPostUrl: result.externalPostUrl ?? null,
-                    response: result.raw,
+                    response: result.raw as Record<string, unknown>,
                     finishedAt: new Date(),
                 },
             });
@@ -115,22 +115,23 @@ export class SocialPublishingProcessor extends WorkerHost {
             return result;
         } catch (e) {
             const err = e as Error & { nonRetryable?: boolean; metaCode?: number };
-            // Platform clients flag permission / token / 4xx errors as
-            // nonRetryable. Honor that so we don't burn the remaining 3 retries
-            // hitting Meta with a request we KNOW will keep failing.
-            const willRetry = !err.nonRetryable && (job.attemptsMade ?? 0) + 1 < (job.opts.attempts ?? 1);
+            // Log full error including fetch cause (e.g. ECONNRESET, ENOTFOUND)
+            const cause = (err as any).cause;
+            const detail = cause ? ` [cause: ${cause.code ?? cause.message ?? cause}]` : '';
+            const willRetry = !err.nonRetryable && (job.attemptsMade ?? 0) + 1 < (job.opts?.attempts ?? 1);
+
+            this.logger.error(`[publish fail] post ${postId} (attempt ${attempt}, retry=${willRetry}): ${err.message}${detail}`);
 
             await applicationDb.publishingLog.update({
                 where: { id: log.id },
                 data: {
                     status: willRetry ? PublishingLogStatus.RETRYING : PublishingLogStatus.FAILED,
-                    errorMessage: err.message,
+                    errorMessage: err.message + detail,
                     errorCode: err.metaCode !== undefined ? String(err.metaCode) : null,
                     finishedAt: new Date(),
                 },
             });
 
-            // If the failure is auth-related, mark the account so the UI surfaces a "reconnect" prompt.
             if (/token|auth|expired|permission/i.test(err.message)) {
                 if (post.accountId) {
                     await applicationDb.socialAccount.update({
@@ -140,11 +141,6 @@ export class SocialPublishingProcessor extends WorkerHost {
                 }
             }
 
-            this.logger.error(`[publish fail] post ${postId} (attempt ${attempt}, retry=${willRetry}): ${err.message}`);
-
-            // UnrecoverableError tells BullMQ to skip remaining attempts and go
-            // straight to the failed state — exactly what we want for permission
-            // and 4xx errors.
             if (err.nonRetryable) {
                 throw new UnrecoverableError(err.message);
             }
@@ -155,16 +151,14 @@ export class SocialPublishingProcessor extends WorkerHost {
     @OnWorkerEvent('failed')
     async onFailed(job: Job<SocialPublishJob>, error: Error) {
         if (!job) return;
-        const isFinal = (job.attemptsMade ?? 0) >= (job.opts.attempts ?? 1);
+        const isFinal = (job.attemptsMade ?? 0) >= (job.opts?.attempts ?? 1);
         if (!isFinal) return;
-        // Final failure — mark the post FAILED and stash the last error.
         try {
             await applicationDb.socialPost.update({
                 where: { id: job.data.postId },
                 data: {
                     status: SocialPostStatus.FAILED,
                     lastError: error.message,
-                    retryCount: job.attemptsMade ?? 0,
                 },
             });
         } catch (e) {

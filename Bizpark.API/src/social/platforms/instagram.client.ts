@@ -240,121 +240,109 @@ export class InstagramClient implements PlatformClient {
         }
     }
 
+    // ── Publishing ──────────────────────────────────────────────────────────────
+
     async publish(input: PublishPostInput): Promise<PublishPostResult> {
-        const igId = input.externalAccountId;
-        if (!igId) throw new Error('Instagram publish requires externalAccountId (IG business id)');
+        const { accessToken, externalAccountId, caption, cta, hashtags, media } = input;
+        if (!externalAccountId) throw new Error('Instagram publishing requires externalAccountId (IG business account ID)');
 
-        const captionParts = [
-            input.caption,
-            input.cta,
-            input.hashtags.map((h) => (h.startsWith('#') ? h : `#${h}`)).join(' '),
-        ].filter(Boolean).join('\n\n');
+        const captionText = this.buildCaption(caption, cta, hashtags);
+        const images = (media || []).filter(m => ['IMAGE', 'THUMBNAIL'].includes(m.kind));
+        const videos = (media || []).filter(m => m.kind === 'VIDEO');
 
-        const images = input.media.filter((m) => m.kind === 'IMAGE' || m.kind === 'THUMBNAIL');
-        const videos = input.media.filter((m) => m.kind === 'VIDEO');
-
-        // ── Two-step: create media container → publish container ─────────
         let containerId: string;
 
         if (videos.length > 0) {
-            // Reels for video. Single video supported per container.
-            const createRes = await fetch(`${FB_GRAPH}/${igId}/media`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    media_type: 'REELS',
-                    video_url: videos[0].url,
-                    caption: captionParts,
-                    access_token: input.accessToken,
-                }),
+            const body = await this.igPost(`/${externalAccountId}/media`, accessToken, {
+                media_type: 'REELS',
+                video_url: videos[0].url,
+                caption: captionText,
             });
-            const createBody = await createRes.json().catch(() => ({})) as { id?: string };
-            if (!createRes.ok || !createBody.id) throw new Error(`IG video container failed: ${createRes.status} ${JSON.stringify(createBody)}`);
-            containerId = createBody.id;
-
-            await this.waitForContainerReady(igId, containerId, input.accessToken);
-
+            containerId = String(body['id'] ?? '');
+            await this.waitContainer(externalAccountId, containerId, accessToken);
         } else if (images.length > 1) {
-            // Carousel: create child containers, then a CAROUSEL container.
             const children: string[] = [];
             for (const img of images) {
-                const childRes = await fetch(`${FB_GRAPH}/${igId}/media`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ image_url: img.url, is_carousel_item: true, access_token: input.accessToken }),
+                const imageUrl = await this.resolveImageUrl(img.url);
+                const child = await this.igPost(`/${externalAccountId}/media`, accessToken, {
+                    image_url: imageUrl,
+                    is_carousel_item: true,
                 });
-                const body = await childRes.json().catch(() => ({})) as { id?: string };
-                if (!childRes.ok || !body.id) throw new Error(`IG carousel child failed: ${childRes.status} ${JSON.stringify(body)}`);
-                children.push(body.id);
+                children.push(String(child['id'] ?? ''));
             }
-            const carouselRes = await fetch(`${FB_GRAPH}/${igId}/media`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    media_type: 'CAROUSEL',
-                    children: children.join(','),
-                    caption: captionParts,
-                    access_token: input.accessToken,
-                }),
+            const carousel = await this.igPost(`/${externalAccountId}/media`, accessToken, {
+                media_type: 'CAROUSEL',
+                children: children.join(','),
+                caption: captionText,
             });
-            const carouselBody = await carouselRes.json().catch(() => ({})) as { id?: string };
-            if (!carouselRes.ok || !carouselBody.id) throw new Error(`IG carousel container failed: ${carouselRes.status} ${JSON.stringify(carouselBody)}`);
-            containerId = carouselBody.id;
+            containerId = String(carousel['id'] ?? '');
         } else if (images.length === 1) {
-            const createRes = await fetch(`${FB_GRAPH}/${igId}/media`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    image_url: images[0].url,
-                    caption: captionParts,
-                    access_token: input.accessToken,
-                }),
+            const imageUrl = await this.resolveImageUrl(images[0].url);
+            const body = await this.igPost(`/${externalAccountId}/media`, accessToken, {
+                image_url: imageUrl,
+                caption: captionText,
             });
-            const body = await createRes.json().catch(() => ({})) as { id?: string };
-            if (!createRes.ok || !body.id) throw new Error(`IG image container failed: ${createRes.status} ${JSON.stringify(body)}`);
-            containerId = body.id;
+            containerId = String(body['id'] ?? '');
         } else {
-            // Instagram does not support text-only posts.
-            throw new Error('Instagram requires at least one image or video.');
+            throw new Error('Instagram requires at least one image or video');
         }
 
-        // Publish the container.
-        const pubRes = await fetch(`${FB_GRAPH}/${igId}/media_publish`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ creation_id: containerId, access_token: input.accessToken }),
-        });
-        const pubBody = await pubRes.json().catch(() => ({})) as { id?: string };
-        if (!pubRes.ok || !pubBody.id) throw new Error(`IG publish failed: ${pubRes.status} ${JSON.stringify(pubBody)}`);
+        if (!containerId) throw new Error('Instagram media container creation failed — no id returned');
 
+        const pub = await this.igPost(`/${externalAccountId}/media_publish`, accessToken, { creation_id: containerId });
+        const postId = String(pub['id'] ?? '');
         return {
-            externalPostId: pubBody.id,
-            externalPostUrl: `https://www.instagram.com/p/${pubBody.id}`,
-            raw: pubBody as unknown as Record<string, unknown>,
+            externalPostId: postId,
+            externalPostUrl: postId ? `https://www.instagram.com/p/${postId}` : null,
+            raw: pub,
         };
     }
 
-    /**
-     * Polls IG until a media container finishes processing. Required for video / reels
-     * which are async; falls through quickly for images.
-     */
-    private async waitForContainerReady(
-        igId: string,
-        containerId: string,
-        accessToken: string,
-        attempts = 20,
-        delayMs = 3000,
-    ): Promise<void> {
-        for (let i = 0; i < attempts; i += 1) {
-            const r = await fetch(`${FB_GRAPH}/${containerId}?fields=status_code,status&access_token=${encodeURIComponent(accessToken)}`);
-            const body = await r.json().catch(() => ({})) as { status_code?: string; status?: string };
-            const status = body.status_code || body.status;
-            if (status === 'FINISHED') return;
-            if (status === 'ERROR' || status === 'EXPIRED') {
-                throw new Error(`IG container processing ${status}: ${JSON.stringify(body)}`);
-            }
-            await new Promise((res) => setTimeout(res, delayMs));
-        }
-        throw new Error('IG container did not reach FINISHED status within timeout');
+    private buildCaption(caption: string, cta?: string | null, hashtags?: string[]): string {
+        const tagStr = (hashtags || []).map(h => h.startsWith('#') ? h : `#${h}`).join(' ');
+        return [caption, cta, tagStr].filter(Boolean).join('\n\n');
     }
+
+    private async igPost(path: string, token: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
+        const url = this.withAuth(`${FB_GRAPH}${path}`, token);
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+        const data = await resp.json() as Record<string, unknown>;
+        if (!resp.ok || data['error']) {
+            const msg = (data['error'] as any)?.message || JSON.stringify(data);
+            throw new Error(`Instagram ${path} failed (${resp.status}): ${msg}`);
+        }
+        return data;
+    }
+
+    /**
+     * Instagram requires a publicly accessible URL for images — data URIs are not
+     * supported by the IG Graph API. If the stored URL is a data URI we upload it
+     * to Facebook's temporary upload endpoint first to get a CDN URL.
+     */
+    private async resolveImageUrl(url: string): Promise<string> {
+        if (!url.startsWith('data:')) return url;
+        // IG doesn't support data URIs — throw a clear error so the user knows
+        throw new Error(
+            'Instagram image publishing requires a public URL, not a data URI. '
+            + 'Upload the image to a CDN (e.g. upload it to Facebook or an S3 bucket) first.',
+        );
+    }
+
+    private async waitContainer(igId: string, containerId: string, token: string, attempts = 20, delay = 3000): Promise<void> {
+        for (let i = 0; i < attempts; i++) {
+            const url = this.withAuth(`${FB_GRAPH}/${containerId}?fields=status_code,status`, token);
+            const resp = await fetch(url);
+            const body = await resp.json() as Record<string, unknown>;
+            const status = body['status_code'] || body['status'];
+            if (status === 'FINISHED') return;
+            if (status === 'ERROR' || status === 'EXPIRED') throw new Error(`IG container ${status}: ${JSON.stringify(body)}`);
+            await new Promise(r => setTimeout(r, delay));
+        }
+        throw new Error('IG container did not reach FINISHED within timeout');
+    }
+
 }

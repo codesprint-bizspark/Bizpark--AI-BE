@@ -16,16 +16,6 @@ const FB_OAUTH = `https://www.facebook.com/${FB_GRAPH_VERSION}/dialog/oauth`;
 
 type GrantedPermission = { permission: string; status: 'granted' | 'declined' | 'expired' };
 
-/** Parse a `data:<mime>;base64,<payload>` URI into raw bytes + mime type. */
-function decodeDataUri(uri: string): { bytes: Buffer; mimeType: string } {
-    const match = /^data:([^;,]+)(?:;base64)?,(.*)$/.exec(uri);
-    if (!match) throw new Error('Malformed data: URI');
-    const mimeType = match[1] || 'application/octet-stream';
-    // Base64-encoded payloads contain only ASCII; raw url-encoded payloads need
-    // decodeURIComponent. We assume base64 here because that's what OpenAI returns.
-    const bytes = Buffer.from(match[2], uri.includes(';base64,') ? 'base64' : 'binary');
-    return { bytes, mimeType };
-}
 type FacebookPage = {
     id: string;
     name: string;
@@ -277,183 +267,97 @@ export class FacebookClient implements PlatformClient {
         }
     }
 
-    // ── Publishing (unchanged contract — uses the stored Page Access Token) ───
+    // ── Publishing ──────────────────────────────────────────────────────────────
 
     async publish(input: PublishPostInput): Promise<PublishPostResult> {
-        if (!input.externalPageId) {
-            throw new Error('Facebook publish requires externalPageId (a Page id)');
-        }
+        const { accessToken, externalPageId, caption, cta, hashtags, media } = input;
+        const pageId = externalPageId ?? '';
+        if (!pageId) throw new Error('Facebook publishing requires externalPageId (Page ID)');
 
-        const captionParts = [
-            input.caption,
-            input.cta,
-            input.hashtags.map((h) => (h.startsWith('#') ? h : `#${h}`)).join(' '),
-        ].filter(Boolean).join('\n\n');
+        const captionText = this.buildCaption(caption, cta, hashtags);
+        const images = (media || []).filter(m => ['IMAGE', 'THUMBNAIL'].includes(m.kind));
+        const videos = (media || []).filter(m => m.kind === 'VIDEO');
 
-        const images = input.media.filter((m) => m.kind === 'IMAGE' || m.kind === 'THUMBNAIL');
-        const videos = input.media.filter((m) => m.kind === 'VIDEO');
-
-        // Video → /videos
         if (videos.length > 0) {
-            const body = await this.uploadMediaItem(`/${input.externalPageId}/videos`, input.accessToken, videos[0].url, {
-                description: captionParts,
-            }, 'video');
-            const id = String((body as { id?: string }).id ?? '');
-            return { externalPostId: id, externalPostUrl: id ? `https://www.facebook.com/${id}` : null, raw: body };
-        }
-
-        // Multi-image → upload each unpublished, then attach to a feed post.
-        if (images.length > 1) {
-            const attachedMedia: Array<{ media_fbid: string }> = [];
-            for (const img of images) {
-                const upBody = await this.uploadMediaItem(`/${input.externalPageId}/photos`, input.accessToken, img.url, {
-                    published: 'false',
-                }, 'image');
-                const fbid = (upBody as { id?: string }).id;
-                if (!fbid) throw new Error(`Facebook photo upload returned no id: ${JSON.stringify(upBody)}`);
-                attachedMedia.push({ media_fbid: fbid });
-            }
-            const feedBody = await this.graphPost(`/${input.externalPageId}/feed`, input.accessToken, {
-                message: captionParts,
-                attached_media: attachedMedia,
+            const body = await this.graphPost(`/${pageId}/videos`, accessToken, {
+                description: captionText,
+                file_url: videos[0].url,
             });
-            const id = String((feedBody as { id?: string }).id ?? '');
-            return { externalPostId: id, externalPostUrl: id ? `https://www.facebook.com/${id}` : null, raw: feedBody };
+            const postId = String(body['id'] ?? '');
+            return { externalPostId: postId, externalPostUrl: postId ? `https://www.facebook.com/${postId}` : null, raw: body };
         }
 
-        // Single image → /photos with caption.
-        if (images.length === 1) {
-            const body = await this.uploadMediaItem(`/${input.externalPageId}/photos`, input.accessToken, images[0].url, {
-                caption: captionParts,
-            }, 'image');
-            const id = String((body as { post_id?: string; id?: string }).post_id ?? (body as { id?: string }).id ?? '');
-            return { externalPostId: id, externalPostUrl: id ? `https://www.facebook.com/${id}` : null, raw: body };
-        }
-
-        // Text only → /feed with message.
-        const textBody = await this.graphPost(`/${input.externalPageId}/feed`, input.accessToken, {
-            message: captionParts,
-        });
-        const id = String((textBody as { id?: string }).id ?? '');
-        return { externalPostId: id, externalPostUrl: id ? `https://www.facebook.com/${id}` : null, raw: textBody };
-    }
-
-    /**
-     * Upload a media item to a Page endpoint. Handles both:
-     *   - Public HTTP(S) URL  → uses Meta's `url` / `file_url` field (Meta fetches it)
-     *   - data: URI (base64)  → decodes and uploads multipart as `source`
-     *
-     * AI-generated images come back from OpenAI's `gpt-image-1` as base64 and
-     * are stored as data URIs in our DB. Without this conversion, Meta rejects
-     * the request because it can't fetch a `data:` scheme.
-     */
-    private async uploadMediaItem(
-        path: string,
-        token: string,
-        mediaUrl: string,
-        extraFields: Record<string, string | number | boolean>,
-        kind: 'image' | 'video',
-    ): Promise<Record<string, unknown>> {
-        if (mediaUrl.startsWith('data:')) {
-            const { bytes, mimeType } = decodeDataUri(mediaUrl);
-            const form = new FormData();
-            for (const [k, v] of Object.entries(extraFields)) form.append(k, String(v));
-            form.append('access_token', token);
-            form.append('appsecret_proof', this.appsecretProof(token));
-            // Copy into a typed array backed by a fresh ArrayBuffer. Node's Buffer
-            // is backed by ArrayBufferLike (which can be a SharedArrayBuffer),
-            // which the strict TS DOM lib refuses for Blob construction.
-            const fresh = new Uint8Array(new ArrayBuffer(bytes.byteLength));
-            fresh.set(bytes);
-            form.append('source', new Blob([fresh], { type: mimeType }), kind === 'video' ? 'upload.mp4' : 'upload.png');
-
-            const res = await fetch(`${FB_GRAPH}${path}`, { method: 'POST', body: form });
-            const parsed = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-            if (!res.ok) {
-                throw this.toPublishError(path, res.status, parsed, '(multipart)');
+        if (images.length > 1) {
+            const attached: Array<{ media_fbid: string }> = [];
+            for (const img of images) {
+                const up = await this.uploadMedia(`/${pageId}/photos`, accessToken, img.url, { published: 'false' }, 'image');
+                const fbid = String(up['id'] ?? '');
+                if (!fbid) throw new Error(`Facebook photo upload returned no id: ${JSON.stringify(up)}`);
+                attached.push({ media_fbid: fbid });
             }
-            return parsed;
+            const feed = await this.graphPost(`/${pageId}/feed`, accessToken, { message: captionText, attached_media: attached });
+            const postId = String(feed['id'] ?? '');
+            return { externalPostId: postId, externalPostUrl: postId ? `https://www.facebook.com/${postId}` : null, raw: feed };
         }
 
-        // Public URL — use the lightweight JSON path (Meta fetches from the URL).
-        const field = kind === 'video' ? 'file_url' : 'url';
-        return this.graphPost(path, token, { [field]: mediaUrl, ...extraFields });
+        if (images.length === 1) {
+            const body = await this.uploadMedia(`/${pageId}/photos`, accessToken, images[0].url, { caption: captionText }, 'image');
+            const postId = String(body['post_id'] ?? body['id'] ?? '');
+            return { externalPostId: postId, externalPostUrl: postId ? `https://www.facebook.com/${postId}` : null, raw: body };
+        }
+
+        // Text-only
+        const body = await this.graphPost(`/${pageId}/feed`, accessToken, { message: captionText });
+        const postId = String(body['id'] ?? '');
+        return { externalPostId: postId, externalPostUrl: postId ? `https://www.facebook.com/${postId}` : null, raw: body };
     }
 
-    // ────────────────────────────────────────────────────────────────────────
-    // Helpers
-    // ────────────────────────────────────────────────────────────────────────
+    private buildCaption(caption: string, cta?: string | null, hashtags?: string[]): string {
+        const tagStr = (hashtags || []).map(h => h.startsWith('#') ? h : `#${h}`).join(' ');
+        return [caption, cta, tagStr].filter(Boolean).join('\n\n');
+    }
 
     private async graphPost(path: string, token: string, body: Record<string, unknown>): Promise<Record<string, unknown>> {
-        const res = await fetch(`${FB_GRAPH}${path}`, {
+        const url = this.withAuth(`${FB_GRAPH}${path}`, token);
+        const resp = await fetch(url, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                ...body,
-                access_token: token,
-                appsecret_proof: this.appsecretProof(token),
-            }),
+            body: JSON.stringify(body),
         });
-        const parsed = (await res.json().catch(() => ({}))) as Record<string, unknown>;
-        if (!res.ok) {
-            throw this.toPublishError(path, res.status, parsed, '');
+        const data = await resp.json() as Record<string, unknown>;
+        if (!resp.ok || data['error']) {
+            const msg = (data['error'] as any)?.message || JSON.stringify(data);
+            throw new Error(`Facebook ${path} failed (${resp.status}): ${msg}`);
         }
-        return parsed;
+        return data;
     }
 
-    /**
-     * Convert a Meta API error envelope into a clear publish-time error.
-     * Permanent failures (auth / permission / bad-param) are flagged with
-     * `nonRetryable=true` so the BullMQ worker can short-circuit retries.
-     */
-    private toPublishError(
-        path: string,
-        status: number,
-        parsed: Record<string, unknown>,
-        tag: string,
-    ): Error & { nonRetryable?: boolean; metaCode?: number; metaSubcode?: number } {
-        const err = (parsed as { error?: { message?: string; code?: number; error_subcode?: number; type?: string } }).error || {};
-        const code = err.code;
-        const subcode = err.error_subcode;
-        const message = err.message || JSON.stringify(parsed);
+    private async uploadMedia(path: string, token: string, mediaUrl: string, extra: Record<string, string>, kind: string): Promise<Record<string, unknown>> {
+        if (mediaUrl.startsWith('data:')) {
+            const match = mediaUrl.match(/^data:([^;,]+)(?:;base64)?,(.*)$/);
+            if (!match) throw new Error('Malformed data URI');
+            const mimeType = match[1];
+            const buffer = Buffer.from(match[2], 'base64');
+            const blob = new Blob([buffer], { type: mimeType });
+            const filename = kind === 'video' ? 'upload.mp4' : 'upload.png';
 
-        // (#200) permission denied — needs App Review or App Dashboard config.
-        // (#10) application doesn't have permission — same root cause.
-        // (#190) invalid OAuth token — user needs to reconnect.
-        const PERMISSION_CODES = new Set([200, 10]);
-        const TOKEN_CODES = new Set([190, 102, 463, 464, 467]);
+            const form = new FormData();
+            form.append('source', blob, filename);
+            form.append('access_token', token);
+            form.append('appsecret_proof', this.appsecretProof(token));
+            for (const [k, v] of Object.entries(extra)) form.append(k, v);
 
-        let actionable = `Facebook ${path}${tag ? ' ' + tag : ''} failed (${status}): ${message}`;
-        let nonRetryable = false;
-
-        if (code !== undefined && PERMISSION_CODES.has(code)) {
-            nonRetryable = true;
-            actionable =
-                `Facebook rejected this post because your app token is missing the publish permission.\n\n`
-                + `Meta says: "${message}"\n\n`
-                + `Fix it in Meta App Dashboard:\n`
-                + `  1. Use cases → "Manage everything on your Page" → Customize → Permissions.\n`
-                + `     Enable: pages_show_list, pages_manage_posts, pages_read_engagement.\n`
-                + `  2. App Roles → Roles → add your Facebook account as Tester / Developer / Admin.\n`
-                + `  3. On facebook.com → Settings & Privacy → Settings → Apps and Websites → remove this app.\n`
-                + `  4. In your dashboard, click Disconnect on the Facebook card, then Connect again.\n`
-                + `     You'll see the full consent screen this time and the new token will carry pages_manage_posts.`;
-        } else if (code !== undefined && TOKEN_CODES.has(code)) {
-            nonRetryable = true;
-            actionable =
-                `Facebook access token is invalid or expired. `
-                + `Meta says: "${message}". `
-                + `Disconnect and reconnect the Facebook account in your dashboard.`;
-        } else if (status >= 400 && status < 500 && status !== 429) {
-            // 4xx (except rate limit) → request will keep failing the same way.
-            nonRetryable = true;
+            const resp = await fetch(`${FB_GRAPH}${path}`, { method: 'POST', body: form });
+            const data = await resp.json() as Record<string, unknown>;
+            if (!resp.ok || data['error']) {
+                const msg = (data['error'] as any)?.message || JSON.stringify(data);
+                throw new Error(`Facebook media upload failed (${resp.status}): ${msg}`);
+            }
+            return data;
         }
 
-        const e = new Error(actionable) as Error & { nonRetryable?: boolean; metaCode?: number; metaSubcode?: number };
-        e.nonRetryable = nonRetryable;
-        e.metaCode = code;
-        e.metaSubcode = subcode;
-        return e;
+        const field = kind === 'video' ? 'file_url' : 'url';
+        return this.graphPost(path, token, { [field]: mediaUrl, ...extra });
     }
 
     /** Return the set of scopes Meta reports as `granted` for this token. */

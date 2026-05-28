@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import {
     ApiSocialAccountEntity,
     applicationDb,
@@ -103,71 +103,6 @@ export class SocialAccountsService {
         await applicationDb.socialAccount.softDelete({ where: { id: account.id } });
     }
 
-    /**
-     * Fetch a connected account ready to publish through.
-     * Decrypts the access token (server-side only) and auto-refreshes if expired
-     * and a refresh token is available.
-     *
-     * Returns the decrypted token along with the account.
-     */
-    async getAccountForPublishing(args: {
-        businessId: string;
-        accountId?: string | null;
-        platform?: SocialPlatform;
-    }): Promise<{ account: ApiSocialAccountEntity; accessToken: string }> {
-        let account: ApiSocialAccountEntity | null = null;
-        if (args.accountId) {
-            account = await applicationDb.socialAccount.findUnique({ where: { id: args.accountId } });
-        } else if (args.platform) {
-            account = await applicationDb.socialAccount.findActiveByBusinessAndPlatform({
-                businessId: args.businessId,
-                platform: args.platform,
-            });
-        }
-        if (!account || account.deletedAt) throw new NotFoundException('No connected social account found');
-        if (account.businessId !== args.businessId) throw new ForbiddenException('Account does not belong to this business');
-        if (account.status === SocialAccountStatus.DISCONNECTED || account.status === SocialAccountStatus.REVOKED) {
-            throw new BadRequestException('Account is disconnected — reconnect required');
-        }
-
-        let accessToken = decryptToken(account.accessTokenCipher);
-        if (!accessToken) throw new BadRequestException('No access token stored — reconnect required');
-
-        const expired = account.tokenExpiresAt && account.tokenExpiresAt.getTime() < Date.now() + 60_000;
-        if (expired) {
-            const refresh = decryptToken(account.refreshTokenCipher);
-            if (refresh) {
-                try {
-                    const result = await this.platforms.get(account.platform).refreshAccessToken(refresh);
-                    account = await this.saveOrUpdateAccount({
-                        businessId: account.businessId,
-                        platform: account.platform,
-                        result,
-                    });
-                    accessToken = decryptToken(account.accessTokenCipher)!;
-                } catch (e) {
-                    // Mark expired so the UI can prompt the user to reconnect.
-                    await applicationDb.socialAccount.update({
-                        where: { id: account.id },
-                        data: {
-                            status: SocialAccountStatus.EXPIRED,
-                            metadata: { ...(account.metadata ?? {}), lastRefreshError: (e as Error).message },
-                        },
-                    });
-                    throw new BadRequestException(`Token expired and refresh failed: ${(e as Error).message}`);
-                }
-            } else {
-                await applicationDb.socialAccount.update({
-                    where: { id: account.id },
-                    data: { status: SocialAccountStatus.EXPIRED },
-                });
-                throw new BadRequestException('Access token expired and no refresh token available — reconnect required');
-            }
-        }
-
-        return { account, accessToken };
-    }
-
     private async saveOrUpdateAccount(args: {
         businessId: string;
         platform: SocialPlatform;
@@ -196,6 +131,53 @@ export class SocialAccountsService {
                 lastRefreshedAt: new Date(),
             },
         });
+    }
+
+    /**
+     * Resolve, validate, and decrypt the access token for a social account.
+     * Throws a non-retryable error if the account is expired/revoked or has no token.
+     */
+    async getAccountForPublishing(args: {
+        businessId: string;
+        accountId: string | null | undefined;
+        platform: SocialPlatform;
+    }): Promise<{ account: ApiSocialAccountEntity; accessToken: string }> {
+        if (!args.accountId) {
+            const err = new Error('No account selected for this post — connect or pick an account first');
+            (err as any).nonRetryable = true;
+            throw err;
+        }
+
+        const account = await applicationDb.socialAccount.findUnique({ where: { id: args.accountId } });
+        if (!account || account.deletedAt) {
+            const err = new Error(`Social account ${args.accountId} not found`);
+            (err as any).nonRetryable = true;
+            throw err;
+        }
+        if (account.businessId !== args.businessId) {
+            const err = new Error('Account does not belong to this business');
+            (err as any).nonRetryable = true;
+            throw err;
+        }
+        if (account.status === SocialAccountStatus.EXPIRED) {
+            const err = new Error(`${args.platform} account token is expired — reconnect required`);
+            (err as any).nonRetryable = true;
+            throw err;
+        }
+        if (account.status === SocialAccountStatus.REVOKED) {
+            const err = new Error(`${args.platform} account access was revoked — reconnect required`);
+            (err as any).nonRetryable = true;
+            throw err;
+        }
+
+        const accessToken = decryptToken(account.accessTokenCipher);
+        if (!accessToken) {
+            const err = new Error(`No access token stored for ${args.platform} account — reconnect required`);
+            (err as any).nonRetryable = true;
+            throw err;
+        }
+
+        return { account, accessToken };
     }
 
     private toSafeView(row: ApiSocialAccountEntity): SocialAccountSafeView {

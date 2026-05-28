@@ -10,126 +10,42 @@ import {
     SocialMediaSource,
     SocialPlatform,
     SocialPostStatus,
-    SocialPostType,
+    TaskType,
     UpdatePostContentDto,
 } from 'bizpark.core';
+import { AgentService } from '../../agent/agent.service';
 import { OpenAiService } from '../ai/openai.service';
 import {
     BusinessBrief,
     buildFieldRegenerationPrompt,
-    buildSocialContentPrompt,
 } from '../ai/prompts';
-
-type VariantPayload = {
-    caption?: string;
-    cta?: string;
-    hashtags?: string[];
-    imagePrompt?: string;
-    flyerPrompt?: string;
-    videoConcept?: string;
-    videoScript?: Array<{ scene: number; visual: string; subtitle?: string }>;
-    notes?: string;
-};
 
 @Injectable()
 export class SocialContentService {
     private readonly logger = new Logger(SocialContentService.name);
 
-    constructor(private readonly openai: OpenAiService) { }
+    constructor(
+        private readonly openai: OpenAiService,
+        private readonly agentService: AgentService,
+    ) { }
 
     async generateForBusiness(args: { dto: GenerateSocialContentDto; userId: string }): Promise<{
-        posts: Array<ApiSocialPostEntity & { mediaItems?: unknown[] }>;
-        generationId: string;
+        taskId: string;
+        status: string;
     }> {
         const dto = args.dto;
-        const business = await applicationDb.business.findUnique({ where: { id: dto.businessId }, include: { websites: true } });
+        const business = await applicationDb.business.findUnique({ where: { id: dto.businessId } });
         if (!business) throw new NotFoundException('Business not found');
         if (!dto.platforms?.length) throw new BadRequestException('At least one platform required');
         if (!dto.postType) throw new BadRequestException('postType required');
 
-        const brief = this.buildBusinessBrief(business);
-        const prompt = buildSocialContentPrompt(brief, {
-            platforms: dto.platforms,
-            postType: dto.postType,
-            topic: dto.topic,
-            tone: dto.tone,
-            audience: dto.audience,
-            hashtagLimit: dto.hashtagLimit,
+        const result = await this.agentService.queueTask({
+            businessId: dto.businessId,
+            taskType: TaskType.SOCIAL_MEDIA_CONTENT,
+            inputData: { dto, userId: args.userId },
         });
 
-        const t0 = Date.now();
-        const completion = await this.openai.chatJson(prompt, { temperature: 0.85 });
-        const parsed = this.openai.parseJson<{ variants: Record<string, VariantPayload> }>(completion.text);
-        const latencyMs = Date.now() - t0;
-
-        const generation = await applicationDb.aiGeneration.create({
-            data: {
-                businessId: dto.businessId,
-                kind: AiGenerationKind.FULL_POST,
-                model: completion.model,
-                input: { dto, brief },
-                output: parsed as unknown as Record<string, unknown>,
-                promptTokens: completion.promptTokens,
-                completionTokens: completion.completionTokens,
-                latencyMs,
-                createdByUserId: args.userId,
-            },
-        });
-
-        // Persist one draft post per platform.
-        const posts: ApiSocialPostEntity[] = [];
-        for (const platform of dto.platforms) {
-            const variant: VariantPayload = parsed.variants?.[platform] ?? {};
-            const account = await applicationDb.socialAccount.findActiveByBusinessAndPlatform({
-                businessId: dto.businessId,
-                platform,
-            });
-            const post = await applicationDb.socialPost.create({
-                data: {
-                    businessId: dto.businessId,
-                    accountId: account?.id ?? null,
-                    platform,
-                    postType: dto.postType,
-                    status: SocialPostStatus.DRAFT,
-                    caption: variant.caption ?? null,
-                    cta: variant.cta ?? null,
-                    hashtags: this.sanitiseHashtags(variant.hashtags ?? []),
-                    aiMetadata: this.aiMetadataFromVariant(variant, dto.postType),
-                    sourceGenerationId: generation.id,
-                    createdByUserId: args.userId,
-                },
-            });
-
-            // For IMAGE and FLYER, kick off an image generation right away so the
-            // FE can preview something. VIDEO is left to the user to provide media —
-            // we surface the script and let them film/upload.
-            if (dto.generateMedia && (dto.postType === SocialPostType.IMAGE || dto.postType === SocialPostType.FLYER)) {
-                const imagePrompt = dto.postType === SocialPostType.FLYER ? variant.flyerPrompt : variant.imagePrompt;
-                if (imagePrompt) {
-                    try {
-                        const img = await this.openai.generateImage({ prompt: imagePrompt });
-                        await applicationDb.socialPostMedia.create({
-                            data: {
-                                postId: post.id,
-                                kind: SocialMediaKind.IMAGE,
-                                source: SocialMediaSource.AI_GENERATED,
-                                url: img.url,
-                                mimeType: 'image/png',
-                                prompt: img.promptUsed,
-                                position: 0,
-                                metadata: { model: img.model, size: img.size },
-                            },
-                        });
-                    } catch (e) {
-                        this.logger.warn(`Image gen failed for post ${post.id}: ${(e as Error).message}`);
-                    }
-                }
-            }
-
-            posts.push(post);
-        }
-
-        return { posts, generationId: generation.id };
+        return { taskId: result.taskId, status: result.status };
     }
 
     async regenerateField(args: {
@@ -323,18 +239,6 @@ export class SocialContentService {
             .map((h) => h.trim().replace(/^#+/, '').replace(/\s+/g, '').toLowerCase())
             .filter(Boolean)
             .slice(0, 30);
-    }
-
-    private aiMetadataFromVariant(v: VariantPayload, postType: SocialPostType): Record<string, unknown> {
-        const md: Record<string, unknown> = {};
-        if (v.notes) md.notes = v.notes;
-        if (postType === SocialPostType.IMAGE && v.imagePrompt) md.imagePrompt = v.imagePrompt;
-        if (postType === SocialPostType.FLYER && v.flyerPrompt) md.flyerPrompt = v.flyerPrompt;
-        if (postType === SocialPostType.VIDEO) {
-            if (v.videoConcept) md.videoConcept = v.videoConcept;
-            if (v.videoScript) md.videoScript = v.videoScript;
-        }
-        return md;
     }
 
     private kindFromField(field: RegenerateContentFieldDto['field']): AiGenerationKind {

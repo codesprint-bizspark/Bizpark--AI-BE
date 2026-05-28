@@ -1,5 +1,6 @@
 import logging
 import uuid as uuid_lib
+from urllib.parse import urlparse
 
 from bullmq import Worker
 from sqlalchemy import select
@@ -8,6 +9,9 @@ from app.config import settings
 from app.db.models import AgentTask, TaskStatus
 from app.db.session import async_session
 from app.agents.website_builder import run_website_builder
+from app.agents.google_review_reply import run_google_review_reply_agent
+from app.agents.social_content import run_social_content_agent
+from app.agents.mobile_app_builder import run_mobile_app_builder
 
 logger = logging.getLogger("runner.processor")
 
@@ -46,9 +50,22 @@ async def process_agent_task(job, token=None):
                 output = await _handle_website_generation(input_data)
                 task.status = TaskStatus.PENDING_APPROVAL
                 task.outputData = output
-            else:
+            elif task_type == "MOBILE_APP_GENERATION":
+                output = await _handle_mobile_app_generation(input_data)
+                task.status = TaskStatus.PENDING_APPROVAL
+                task.outputData = output
+            elif task_type == "GOOGLE_REVIEW_REPLY":
+                output = await _handle_google_review_reply(input_data)
                 task.status = TaskStatus.COMPLETED
-                task.outputData = {"message": f"{task_type} not yet implemented"}
+                task.outputData = output
+            elif task_type == "SOCIAL_MEDIA_CONTENT":
+                output = await run_social_content_agent(input_data, session)
+                task.status = TaskStatus.COMPLETED
+                task.outputData = output
+            else:
+                logger.warning(f"[AGENT] No handler for task type '{task_type}' — marking FAILED")
+                task.status = TaskStatus.FAILED
+                task.outputData = {"error": f"Task type '{task_type}' is not implemented"}
 
         except Exception as exc:
             logger.error(f"[AGENT ERROR] Task {task_id}: {exc}")
@@ -78,7 +95,32 @@ async def _handle_website_generation(input_data: dict) -> dict:
     }
 
 
-from urllib.parse import urlparse
+async def _handle_google_review_reply(input_data: dict) -> dict:
+    business = input_data.get("business", {})
+    review = input_data.get("review", {})
+    policy = input_data.get("policy", {})
+
+    return await run_google_review_reply_agent(
+        business=business,
+        review=review,
+        policy=policy,
+    )
+
+
+async def _handle_mobile_app_generation(input_data: dict) -> dict:
+    business = input_data.get("business", {})
+    tone = input_data.get("tone", "professional")
+
+    generated = await run_mobile_app_builder(
+        business=business,
+        tone=tone,
+    )
+
+    return {
+        "generatedContent": generated,
+        "businessId": business.get("id"),
+    }
+
 
 async def start_worker():
     # Parse the Redis URL manually for BullMQ which expects a dictionary

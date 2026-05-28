@@ -4,6 +4,7 @@ import { AgentModule } from './agent/agent.module';
 import { BusinessModule } from './business/business.module';
 import { AuthModule } from './auth/auth.module';
 import { SocialModule } from './social/social.module';
+import { GoogleBusinessModule } from './google-business/google-business.module';
 
 /**
  * Redis connection config.
@@ -38,6 +39,7 @@ function buildRedisConnection() {
     BusinessModule,
     AuthModule,
     SocialModule,
+    GoogleBusinessModule,
   ],
 })
 export class AppModule { }

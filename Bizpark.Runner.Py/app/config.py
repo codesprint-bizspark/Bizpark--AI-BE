@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     commerce_url: str = "http://localhost:3003"
     internal_api_key: str = ""
     openai_api_key: str = ""
+    gemini_api_key: str = ""
+
+    # Social publishing
+    token_encryption_key: str = ""
+    facebook_app_secret: str = ""
 
     model_config = {"env_file": str(CORE_ENV), "env_file_encoding": "utf-8", "extra": "ignore"}
 
