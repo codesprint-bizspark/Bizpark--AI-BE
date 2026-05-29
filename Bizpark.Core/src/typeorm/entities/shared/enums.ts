@@ -32,6 +32,17 @@ export const WebsiteStatus = {
 } as const;
 export type WebsiteStatus = (typeof WebsiteStatus)[keyof typeof WebsiteStatus];
 
+export const MobileAppStatus = {
+    DRAFT: 'DRAFT',
+    GENERATING: 'GENERATING',
+    PENDING_APPROVAL: 'PENDING_APPROVAL',
+    PUBLISHED: 'PUBLISHED',
+    UNPUBLISHED: 'UNPUBLISHED',
+    FAILED: 'FAILED',
+    SUSPENDED: 'SUSPENDED',
+} as const;
+export type MobileAppStatus = (typeof MobileAppStatus)[keyof typeof MobileAppStatus];
+
 export const AdminRole = {
     SUPER_ADMIN: 'SUPER_ADMIN',
     ADMIN: 'ADMIN',
@@ -61,6 +72,7 @@ export const TaskType = {
     BLOG_POST_WRITING: 'BLOG_POST_WRITING',
     GOOGLE_REVIEW_REPLY: 'GOOGLE_REVIEW_REPLY',
     SOCIAL_POST_PUBLISH: 'SOCIAL_POST_PUBLISH',
+    MOBILE_APP_GENERATION: 'MOBILE_APP_GENERATION',
 } as const;
 export type TaskType = (typeof TaskType)[keyof typeof TaskType];
 
