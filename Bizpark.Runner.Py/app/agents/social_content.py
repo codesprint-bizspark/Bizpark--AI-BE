@@ -354,6 +354,67 @@ async def run_social_content_agent(input_data: dict, session: AsyncSession) -> d
             "accountId": account_id,
         })
 
+    # ── Step 3b: Attach user-uploaded media (images / videos) ────────────────
+    # The FE passes the bytes as data URLs in `dto.userMedia` so the agent can
+    # persist them atomically alongside the post — no separate authenticated
+    # upload step, no race condition between post creation and media attach.
+    user_media = dto.get("userMedia") or []
+    if user_media:
+        logger.info(
+            f"Attaching {len(user_media)} user-uploaded media item(s) to "
+            f"{len(post_id_by_platform)} post(s)"
+        )
+        for platform, post_id in post_id_by_platform.items():
+            for idx, item in enumerate(user_media):
+                url = (item or {}).get("url")
+                if not url:
+                    logger.warning(f"Skipping userMedia[{idx}] for {platform}: missing url")
+                    continue
+                raw_kind = ((item or {}).get("kind") or "IMAGE").upper()
+                kind = raw_kind if raw_kind in ("IMAGE", "VIDEO", "THUMBNAIL") else "IMAGE"
+                mime_type = (item or {}).get("mimeType")
+                width = (item or {}).get("width")
+                height = (item or {}).get("height")
+                duration_ms = (item or {}).get("durationMs")
+                meta = {
+                    "originalName": (item or {}).get("originalName"),
+                    "sizeBytes": (item or {}).get("sizeBytes"),
+                }
+                # Strip None values so the jsonb column stays tidy.
+                meta = {k: v for k, v in meta.items() if v is not None}
+
+                media_id = str(uuid.uuid4())
+                # NB: kind is interpolated as a literal — it's whitelisted to
+                # IMAGE / VIDEO / THUMBNAIL above, so this isn't user input.
+                # Doing it as a bind param requires a CAST::"SocialMediaKind"
+                # which the existing AI-image insert doesn't use either.
+                await session.execute(
+                    text(f"""
+                        INSERT INTO api."SocialPostMedia"
+                          (id, "postId", kind, source, url, "mimeType",
+                           width, height, "durationMs", position, metadata,
+                           "createdAt", "updatedAt")
+                        VALUES
+                          (:mid, :pid, '{kind}',
+                           'USER_UPLOAD', :url, :mt,
+                           :w, :h, :dur, :pos, CAST(:meta AS jsonb),
+                           :now, :now)
+                    """),
+                    {
+                        "mid": media_id,
+                        "pid": post_id,
+                        "url": url,
+                        "mt": mime_type,
+                        "w": width,
+                        "h": height,
+                        "dur": duration_ms,
+                        "pos": idx,
+                        "meta": json.dumps(meta) if meta else "{}",
+                        "now": now,
+                    },
+                )
+            logger.info(f"Attached {len(user_media)} user-uploaded media to post {post_id}")
+
     # ── Step 4: Collect image results (all ran concurrently since Step 2) ────
     if image_tasks:
         logger.info(f"Waiting for {len(image_tasks)} image task(s) to complete…")
@@ -380,6 +441,8 @@ async def run_social_content_agent(input_data: dict, session: AsyncSession) -> d
 
             media_id = str(uuid.uuid4())
             variant = variants.get(platform, {})
+            # User uploads (if any) already occupy positions 0..len(userMedia)-1
+            ai_position = len(user_media)
             await session.execute(
                 text("""
                     INSERT INTO api."SocialPostMedia"
@@ -387,18 +450,19 @@ async def run_social_content_agent(input_data: dict, session: AsyncSession) -> d
                        position, prompt, metadata, "createdAt", "updatedAt")
                     VALUES
                       (:mid, :pid, 'IMAGE', 'AI_GENERATED', :url, 'image/png',
-                       0, :prompt, CAST(:meta AS jsonb), :now, :now)
+                       :pos, :prompt, CAST(:meta AS jsonb), :now, :now)
                 """),
                 {
                     "mid": media_id,
                     "pid": post_id,
                     "url": result,
+                    "pos": ai_position,
                     "prompt": variant.get("imagePrompt") or variant.get("flyerPrompt"),
                     "meta": json.dumps({"model": "gpt-image-1", "size": "1024x1024"}),
                     "now": now,
                 },
             )
-            logger.info(f"AI image saved for {platform} post {post_id}")
+            logger.info(f"AI image saved for {platform} post {post_id} at position {ai_position}")
 
     await session.commit()
     logger.info(f"Social content: {len(created_posts)} draft posts created for business {business_id}")
