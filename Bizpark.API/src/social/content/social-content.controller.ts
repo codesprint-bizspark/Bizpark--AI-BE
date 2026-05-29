@@ -8,10 +8,14 @@ import {
     Post,
     Patch,
     Query,
+    UploadedFiles,
     UseGuards,
+    UseInterceptors,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import {
     AttachMediaDto,
+    BulkAttachMediaDto,
     GenerateSocialContentDto,
     RegenerateContentFieldDto,
     SocialPlatform,
@@ -21,6 +25,16 @@ import {
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { CurrentUser } from '../../auth/current-user.decorator';
 import { SocialContentService } from './social-content.service';
+
+// Lightweight shim — we don't pull in @types/multer, so type the minimal
+// shape we actually read off each uploaded file.
+type UploadedMulterFile = {
+    fieldname: string;
+    originalname: string;
+    mimetype: string;
+    size: number;
+    buffer: Buffer;
+};
 
 @Controller('api/social/content')
 @UseGuards(JwtAuthGuard)
@@ -90,6 +104,47 @@ export class SocialContentController {
         @Body() dto: AttachMediaDto,
     ) {
         const media = await this.service.attachMedia({ businessId, postId, dto });
+        return { success: true, data: media };
+    }
+
+    @Post(':businessId/posts/:postId/media/bulk')
+    async bulkAttachMedia(
+        @Param('businessId') businessId: string,
+        @Param('postId') postId: string,
+        @Body() dto: BulkAttachMediaDto,
+    ) {
+        const media = await this.service.bulkAttachMedia({ businessId, postId, dto });
+        return { success: true, data: media };
+    }
+
+    /**
+     * Upload one or more files (images / videos) directly as multipart/form-data.
+     * The bytes are converted to base64 data URLs so they slot straight into the
+     * same `SocialPostMedia.url` column the AI image flow already uses.
+     *
+     * 50MB per file is comfortable headroom for a Reels-length video; the limit
+     * matches the JSON body parser cap so users can't bypass one and trip the
+     * other.
+     */
+    @Post(':businessId/posts/:postId/media/upload')
+    @UseInterceptors(FilesInterceptor('files', 12, {
+        limits: { fileSize: 50 * 1024 * 1024 },
+    }))
+    async uploadMediaFiles(
+        @Param('businessId') businessId: string,
+        @Param('postId') postId: string,
+        @UploadedFiles() files: UploadedMulterFile[],
+    ) {
+        const media = await this.service.uploadMediaFiles({
+            businessId,
+            postId,
+            files: (files ?? []).map((f) => ({
+                originalName: f.originalname,
+                mimeType: f.mimetype,
+                size: f.size,
+                buffer: f.buffer,
+            })),
+        });
         return { success: true, data: media };
     }
 

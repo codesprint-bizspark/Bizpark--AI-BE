@@ -5,6 +5,7 @@ import { AuthModule } from '../auth/auth.module';
 import { SocialAccountsController } from './accounts/social-accounts.controller';
 import { SocialAccountsService } from './accounts/social-accounts.service';
 import { OpenAiService } from './ai/openai.service';
+import { PublicMediaController } from './content/public-media.controller';
 import { SocialContentController } from './content/social-content.controller';
 import { SocialContentService } from './content/social-content.service';
 import { FacebookClient } from './platforms/facebook.client';
@@ -31,6 +32,7 @@ import { SocialPublishingProcessor } from './publishing/social-publishing.proces
         SocialAccountsController,
         SocialContentController,
         SocialPublishingController,
+        PublicMediaController,
     ],
     providers: [
         FacebookClient,

@@ -279,10 +279,15 @@ export class FacebookClient implements PlatformClient {
         const videos = (media || []).filter(m => m.kind === 'VIDEO');
 
         if (videos.length > 0) {
-            const body = await this.graphPost(`/${pageId}/videos`, accessToken, {
-                description: captionText,
-                file_url: videos[0].url,
-            });
+            // Route through uploadMedia so data: URIs are sent as multipart
+            // (Graph can't fetch data URIs via file_url — they aren't reachable).
+            const body = await this.uploadMedia(
+                `/${pageId}/videos`,
+                accessToken,
+                videos[0].url,
+                { description: captionText },
+                'video',
+            );
             const postId = String(body['id'] ?? '');
             return { externalPostId: postId, externalPostUrl: postId ? `https://www.facebook.com/${postId}` : null, raw: body };
         }
@@ -339,7 +344,7 @@ export class FacebookClient implements PlatformClient {
             const mimeType = match[1];
             const buffer = Buffer.from(match[2], 'base64');
             const blob = new Blob([buffer], { type: mimeType });
-            const filename = kind === 'video' ? 'upload.mp4' : 'upload.png';
+            const filename = this.filenameForMime(mimeType, kind);
 
             const form = new FormData();
             form.append('source', blob, filename);
@@ -347,6 +352,9 @@ export class FacebookClient implements PlatformClient {
             form.append('appsecret_proof', this.appsecretProof(token));
             for (const [k, v] of Object.entries(extra)) form.append(k, v);
 
+            this.logger.log(
+                `FB multipart upload → ${path} (${kind}, ${mimeType}, ${buffer.length} bytes, filename=${filename})`,
+            );
             const resp = await fetch(`${FB_GRAPH}${path}`, { method: 'POST', body: form });
             const data = await resp.json() as Record<string, unknown>;
             if (!resp.ok || data['error']) {
@@ -358,6 +366,24 @@ export class FacebookClient implements PlatformClient {
 
         const field = kind === 'video' ? 'file_url' : 'url';
         return this.graphPost(path, token, { [field]: mediaUrl, ...extra });
+    }
+
+    /** Pick a sensible filename + extension from the MIME type — Facebook's
+     *  video upload validates the extension and rejects "upload.mp4" carrying
+     *  e.g. quicktime bytes. */
+    private filenameForMime(mimeType: string, kind: string): string {
+        const mt = (mimeType || '').toLowerCase();
+        if (kind === 'video') {
+            if (mt.includes('quicktime') || mt.includes('mov')) return 'upload.mov';
+            if (mt.includes('webm')) return 'upload.webm';
+            if (mt.includes('x-matroska') || mt.includes('mkv')) return 'upload.mkv';
+            if (mt.includes('avi')) return 'upload.avi';
+            return 'upload.mp4';
+        }
+        if (mt.includes('jpeg') || mt.includes('jpg')) return 'upload.jpg';
+        if (mt.includes('webp')) return 'upload.webp';
+        if (mt.includes('gif')) return 'upload.gif';
+        return 'upload.png';
     }
 
     /** Return the set of scopes Meta reports as `granted` for this token. */

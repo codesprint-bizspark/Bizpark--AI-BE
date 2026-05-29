@@ -85,7 +85,7 @@ export class SocialPublishingProcessor extends WorkerHost {
                 caption: post.caption ?? '',
                 hashtags: post.hashtags ?? [],
                 cta: post.cta,
-                media: media.map((m) => ({ kind: m.kind, url: m.url, mimeType: m.mimeType })),
+                media: media.map((m) => ({ id: m.id, kind: m.kind, url: m.url, mimeType: m.mimeType })),
                 aiMetadata: post.aiMetadata,
             });
 

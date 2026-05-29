@@ -4,6 +4,7 @@ import {
     ApiSocialPostEntity,
     applicationDb,
     AttachMediaDto,
+    BulkAttachMediaDto,
     GenerateSocialContentDto,
     RegenerateContentFieldDto,
     SocialMediaKind,
@@ -38,6 +39,14 @@ export class SocialContentService {
         if (!business) throw new NotFoundException('Business not found');
         if (!dto.platforms?.length) throw new BadRequestException('At least one platform required');
         if (!dto.postType) throw new BadRequestException('postType required');
+
+        const userMediaCount = dto.userMedia?.length ?? 0;
+        if (userMediaCount > 0) {
+            const totalBytes = (dto.userMedia ?? []).reduce((acc, m) => acc + (m.sizeBytes ?? 0), 0);
+            this.logger.log(
+                `Queueing social-content task with ${userMediaCount} user-uploaded media (~${Math.round(totalBytes / 1024)} KB) for business ${dto.businessId}`,
+            );
+        }
 
         const result = await this.agentService.queueTask({
             businessId: dto.businessId,
@@ -183,6 +192,95 @@ export class SocialContentService {
                 metadata: args.dto.metadata ?? null,
             },
         });
+    }
+
+    /**
+     * Accept raw file buffers (from multipart/form-data) and persist them as
+     * SocialPostMedia rows. Bytes are stored as base64 data URLs to match the
+     * AI-generated image storage format the rest of the platform already
+     * understands (FacebookClient.uploadMedia already handles both forms).
+     */
+    async uploadMediaFiles(args: {
+        businessId: string;
+        postId: string;
+        files: Array<{ originalName: string; mimeType: string; size: number; buffer: Buffer }>;
+    }) {
+        const post = await applicationDb.socialPost.findUnique({ where: { id: args.postId } });
+        if (!post) throw new NotFoundException('Post not found');
+        if (post.businessId !== args.businessId) throw new ForbiddenException('Forbidden');
+        if (post.status === SocialPostStatus.PUBLISHED) throw new BadRequestException('Cannot modify a published post');
+        if (!args.files?.length) throw new BadRequestException('At least one file is required');
+
+        const existing = await applicationDb.socialPostMedia.findManyByPost({ postId: post.id });
+        const baseIndex = existing.length;
+
+        const created: any[] = [];
+        for (let i = 0; i < args.files.length; i++) {
+            const f = args.files[i];
+            const mime = (f.mimeType || '').toLowerCase();
+            const kind: SocialMediaKind = mime.startsWith('video/')
+                ? SocialMediaKind.VIDEO
+                : mime.startsWith('image/')
+                    ? SocialMediaKind.IMAGE
+                    : SocialMediaKind.IMAGE; // fallback — keep going so a single odd MIME doesn't fail the batch
+            const url = `data:${f.mimeType || (kind === SocialMediaKind.VIDEO ? 'video/mp4' : 'image/png')};base64,${f.buffer.toString('base64')}`;
+
+            const row = await applicationDb.socialPostMedia.create({
+                data: {
+                    postId: post.id,
+                    kind,
+                    source: SocialMediaSource.USER_UPLOAD,
+                    url,
+                    mimeType: f.mimeType || null,
+                    position: baseIndex + i,
+                    metadata: { originalName: f.originalName, sizeBytes: f.size },
+                },
+            });
+            created.push(row);
+            this.logger.log(`Uploaded media for post ${post.id}: ${f.originalName} (${f.size} bytes, ${kind})`);
+        }
+        return created;
+    }
+
+    /**
+     * Attach many user-uploaded files (images / videos) to a post in one round-trip.
+     * Existing media on the post keeps its position; new items are appended in
+     * the order they appear in `dto.items`.
+     */
+    async bulkAttachMedia(args: { businessId: string; postId: string; dto: BulkAttachMediaDto }) {
+        const post = await applicationDb.socialPost.findUnique({ where: { id: args.postId } });
+        if (!post) throw new NotFoundException('Post not found');
+        if (post.businessId !== args.businessId) throw new ForbiddenException('Forbidden');
+        if (post.status === SocialPostStatus.PUBLISHED) throw new BadRequestException('Cannot modify a published post');
+        if (!args.dto.items?.length) throw new BadRequestException('At least one media item is required');
+
+        const existing = await applicationDb.socialPostMedia.findManyByPost({ postId: post.id });
+        const baseIndex = existing.length;
+
+        const created: any[] = [];
+        for (let i = 0; i < args.dto.items.length; i++) {
+            const item = args.dto.items[i];
+            if (!item.url) throw new BadRequestException(`Media item #${i + 1} is missing url`);
+            if (!item.kind) throw new BadRequestException(`Media item #${i + 1} is missing kind`);
+
+            const row = await applicationDb.socialPostMedia.create({
+                data: {
+                    postId: post.id,
+                    kind: item.kind,
+                    source: item.source ?? SocialMediaSource.USER_UPLOAD,
+                    url: item.url,
+                    mimeType: item.mimeType ?? null,
+                    width: item.width ?? null,
+                    height: item.height ?? null,
+                    durationMs: item.durationMs ?? null,
+                    position: item.position ?? baseIndex + i,
+                    prompt: item.prompt ?? null,
+                    metadata: item.metadata ?? null,
+                },
+            });
+            created.push(row);
+        }
+        return created;
     }
 
     async removeMedia(args: { businessId: string; postId: string; mediaId: string }) {

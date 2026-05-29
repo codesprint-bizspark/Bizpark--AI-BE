@@ -7,7 +7,7 @@ export type PublishPostInput = {
     caption: string;
     hashtags?: string[];
     cta?: string | null;
-    media?: Array<{ kind: string; url: string; mimeType?: string | null }>;
+    media?: Array<{ id: string; kind: string; url: string; mimeType?: string | null }>;
     aiMetadata?: unknown;
 };
 
