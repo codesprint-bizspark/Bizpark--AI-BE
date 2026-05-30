@@ -1,39 +1,110 @@
 <%- include('partials/header') %>
-<section class="hero-panel">
+<%
+  const subscriptionTotal = dashboard.subscriptions.free + dashboard.subscriptions.pro + dashboard.subscriptions.agency + dashboard.subscriptions.promotional;
+  const freeEnd = subscriptionTotal ? (dashboard.subscriptions.free / subscriptionTotal) * 100 : 0;
+  const proEnd = subscriptionTotal ? ((dashboard.subscriptions.free + dashboard.subscriptions.pro) / subscriptionTotal) * 100 : 0;
+  const agencyEnd = subscriptionTotal ? ((dashboard.subscriptions.free + dashboard.subscriptions.pro + dashboard.subscriptions.agency) / subscriptionTotal) * 100 : 0;
+  const donut = subscriptionTotal
+    ? `conic-gradient(var(--purple) 0 ${freeEnd}%, #12b76a ${freeEnd}% ${proEnd}%, #f79009 ${proEnd}% ${agencyEnd}%, #b42318 ${agencyEnd}% 100%)`
+    : 'conic-gradient(#eef0f7 0 100%)';
+  const attentionItems = dashboard.health.filter((item) => item.value > 0);
+%>
+
+<section class="command-hero command-hero--compact">
   <div>
-    <span class="eyebrow">Admin Command Center</span>
-    <h2>Control every business, website, subscription, and AI task from one place.</h2>
-    <p>Monitor registrations, approve generated pages, manage client access, and keep deployed storefronts live, suspended, or ready for another spark.</p>
+    <span class="eyebrow">Executive Overview</span>
+    <h2>Platform health and priority activity.</h2>
+  </div>
+  <div class="hero-actions">
+    <% dashboard.quickActions.forEach((action) => { %>
+      <a class="button" href="<%= action.href %>"><%= action.label %></a>
+    <% }) %>
+  </div>
+  <div class="command-attention">
+    <span>Needs attention</span>
+    <strong><%= dashboard.hero.attentionCount %></strong>
   </div>
 </section>
 
-<section class="grid">
-  <% Object.entries(stats).forEach(([label, value]) => { %>
-    <div class="card">
-      <div class="muted"><%= label %></div>
-      <div class="metric"><%= value %></div>
-    </div>
+<section class="command-kpi-grid command-kpi-grid--compact">
+  <% dashboard.kpis.forEach((kpi) => { %>
+    <a class="command-kpi-card" href="<%= kpi.label.includes('Business') ? '/admin/businesses' : kpi.label.includes('Website') ? '/admin/websites' : kpi.label.includes('Subscription') ? '/admin/subscriptions' : '/admin/agent-tasks' %>">
+      <span class="command-icon command-icon--<%= kpi.icon %>"></span>
+      <span class="kpi-label"><%= kpi.label %></span>
+      <strong><%= kpi.value %></strong>
+      <span class="kpi-trend kpi-trend--<%= kpi.trend %>"><%= kpi.trend === 'up' ? '+' : '' %><%= kpi.change %>%</span>
+    </a>
   <% }) %>
 </section>
 
-<section class="grid" style="margin-top: 20px;">
-  <div class="card">
-    <h2>Recent Businesses</h2>
-    <% recent.businesses.forEach((business) => { %>
-      <p><a href="/admin/businesses/<%= business.id %>"><%= business.name %></a> <span class="badge"><%= business.status %></span></p>
-    <% }) %>
-  </div>
-  <div class="card">
-    <h2>Recent Websites</h2>
-    <% recent.websites.forEach((website) => { %>
-      <p><a href="/admin/websites/<%= website.id %>"><%= website.domain || website.id %></a> <span class="badge"><%= website.status %></span></p>
-    <% }) %>
-  </div>
-  <div class="card">
-    <h2>Recent Tasks</h2>
-    <% recent.tasks.forEach((task) => { %>
-      <p><a href="/admin/agent-tasks/<%= task.id %>"><%= task.taskType %></a> <span class="badge"><%= task.status %></span></p>
-    <% }) %>
-  </div>
+<section class="executive-overview-grid">
+  <article class="attention-panel">
+    <div class="panel-header">
+      <div>
+        <p class="eyebrow">Needs Attention</p>
+        <h2>Priority queue</h2>
+      </div>
+      <strong><%= dashboard.hero.attentionCount %></strong>
+    </div>
+    <% if (attentionItems.length) { %>
+      <div class="attention-list">
+        <% attentionItems.forEach((item) => { %>
+          <a class="attention-item attention-item--<%= item.state %>" href="<%= item.href %>">
+            <span><%= item.label %></span>
+            <strong><%= item.value %></strong>
+          </a>
+        <% }) %>
+      </div>
+    <% } else { %>
+      <p class="dashboard-empty">Everything important is clear right now.</p>
+    <% } %>
+  </article>
+
+  <article class="activity-panel activity-panel--compact">
+    <div class="panel-header">
+      <div>
+        <p class="eyebrow">Recent Activity</p>
+        <h2>Latest platform events</h2>
+      </div>
+    </div>
+    <% if (dashboard.activity.length) { %>
+      <div class="activity-timeline">
+        <% dashboard.activity.slice(0, 7).forEach((item) => { %>
+          <a class="activity-item" href="<%= item.href %>">
+            <span class="command-icon command-icon--<%= item.icon %>"></span>
+            <span>
+              <strong><%= item.label %></strong>
+              <small><%= item.timestamp.toISOString().slice(0, 16).replace('T', ' ') %> | <%= item.status %></small>
+            </span>
+          </a>
+        <% }) %>
+      </div>
+    <% } else { %>
+      <p class="dashboard-empty">No recent platform activity yet.</p>
+    <% } %>
+  </article>
+
+  <article class="subscription-insights-panel subscription-insights-panel--compact">
+    <div class="panel-header">
+      <div>
+        <p class="eyebrow">Subscriptions</p>
+        <h2>Plan distribution</h2>
+      </div>
+      <a href="/admin/subscriptions">Manage</a>
+    </div>
+    <div class="donut-layout donut-layout--compact">
+      <div class="donut-chart" style="background: <%= donut %>;">
+        <strong><%= subscriptionTotal %></strong>
+        <span>Total</span>
+      </div>
+      <div class="donut-legend">
+        <span><i style="background: var(--purple);"></i>Free <strong><%= dashboard.subscriptions.free %></strong></span>
+        <span><i style="background: #12b76a;"></i>Pro <strong><%= dashboard.subscriptions.pro %></strong></span>
+        <span><i style="background: #f79009;"></i>Agency <strong><%= dashboard.subscriptions.agency %></strong></span>
+        <span><i style="background: #b42318;"></i>Promotional <strong><%= dashboard.subscriptions.promotional %></strong></span>
+      </div>
+    </div>
+  </article>
 </section>
+
 <%- include('partials/footer') %>

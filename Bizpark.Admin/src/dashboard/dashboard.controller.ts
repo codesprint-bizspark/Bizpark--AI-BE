@@ -11,11 +11,11 @@ export class DashboardController {
   @Get()
   @Render('dashboard')
   async dashboard(@Req() request: AdminRequest) {
+    const commandCenter = await this.dashboardService.getCommandCenter();
     return {
       title: 'Dashboard',
       admin: request.adminUser,
-      stats: await this.dashboardService.getStats(),
-      recent: await this.dashboardService.getRecent(),
+      dashboard: commandCenter,
     };
   }
 }
