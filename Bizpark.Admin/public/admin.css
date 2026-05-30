@@ -1911,7 +1911,8 @@ button {
 .management-panel > form[id^="delete-"],
 .management-panel > form[id^="publish-"],
 .management-panel > form[id^="unpublish-"],
-.management-panel > form[id^="redeploy-"] {
+.management-panel > form[id^="redeploy-"],
+.management-panel > form[id^="reset-"] {
   display: none;
 }
 
@@ -1990,6 +1991,10 @@ button {
 
 .management-table td {
   vertical-align: middle;
+}
+
+.management-table tbody tr:hover {
+  background: #fbfaff;
 }
 
 .select-column {
@@ -2080,6 +2085,10 @@ button {
 
 .website-table {
   min-width: 1080px;
+}
+
+.user-table {
+  min-width: 980px;
 }
 
 .row-actions {
