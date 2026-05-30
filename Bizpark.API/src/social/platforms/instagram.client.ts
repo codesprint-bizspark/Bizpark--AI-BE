@@ -284,9 +284,25 @@ export class InstagramClient implements PlatformClient {
 
         const pub = await this.igPost(`/${externalAccountId}/media_publish`, accessToken, { creation_id: containerId });
         const postId = String(pub['id'] ?? '');
+
+        // The published media id is NOT a public shortcode — fetch the real permalink.
+        let permalink: string | null = null;
+        if (postId) {
+            try {
+                const permUrl = `${this.IG_GRAPH}/${postId}?fields=permalink&access_token=${encodeURIComponent(accessToken)}`;
+                const permRes = await fetch(permUrl);
+                const permData = await permRes.json() as Record<string, unknown>;
+                if (permRes.ok && typeof permData['permalink'] === 'string') {
+                    permalink = permData['permalink'] as string;
+                }
+            } catch (e) {
+                this.logger.warn(`Could not fetch IG permalink for ${postId}: ${(e as Error).message}`);
+            }
+        }
+
         return {
             externalPostId: postId,
-            externalPostUrl: postId ? `https://www.instagram.com/p/${postId}` : null,
+            externalPostUrl: permalink,
             raw: pub,
         };
     }
