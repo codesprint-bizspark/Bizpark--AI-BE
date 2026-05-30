@@ -8,16 +8,17 @@ import (
 )
 
 type Config struct {
-	DatabaseURL string
-	Port        string
+	CommerceDatabaseURL string // Neon Commerce DB — tenant schemas + McpApiKey
+	Port                string
 }
 
 func Load() *Config {
 	_ = godotenv.Load("../.env")
+	_ = godotenv.Load(".env")
 
-	dbURL := os.Getenv("DATABASE_URL")
-	if dbURL == "" {
-		log.Fatal("DATABASE_URL environment variable is required")
+	commerceURL := os.Getenv("COMMERCE_DATABASE_URL")
+	if commerceURL == "" {
+		log.Fatal("COMMERCE_DATABASE_URL is required")
 	}
 
 	port := os.Getenv("MCP_PORT")
@@ -26,7 +27,7 @@ func Load() *Config {
 	}
 
 	return &Config{
-		DatabaseURL: dbURL,
-		Port:        port,
+		CommerceDatabaseURL: commerceURL,
+		Port:                port,
 	}
 }

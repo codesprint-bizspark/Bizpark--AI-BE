@@ -16,11 +16,16 @@ func main() {
 	cfg := config.Load()
 
 	ctx := context.Background()
-	database, err := db.New(ctx, cfg.DatabaseURL)
+	database, err := db.New(ctx, cfg.CommerceDatabaseURL)
 	if err != nil {
-		log.Fatalf("DB connection failed: %v", err)
+		log.Fatalf("Commerce DB connection failed: %v", err)
 	}
 	defer database.Close()
+
+	// Ensure McpApiKey table exists in Commerce DB public schema
+	if err := database.EnsureApiKeyTable(ctx); err != nil {
+		log.Fatalf("Failed to create McpApiKey table: %v", err)
+	}
 
 	mcpServer := server.NewMCPServer(
 		"BizSpark MCP",
@@ -28,16 +33,13 @@ func main() {
 		server.WithToolCapabilities(true),
 		server.WithInstructions(
 			"You are a business assistant for a BizSpark customer. "+
-				"You have access to their business data: social posts, Google reviews, "+
-				"website content, and connected social accounts. "+
+				"You have access to their store data: products, orders, and customers. "+
 				"Answer questions about their business clearly and helpfully.",
 		),
 	)
 
 	tools.Register(mcpServer, database)
 
-	// WithContextFunc — validates the API key and injects businessId into context
-	// before each MCP request is processed.
 	authMiddleware := func(ctx context.Context, r *http.Request) context.Context {
 		authHeader := r.Header.Get("Authorization")
 		rawKey := strings.TrimPrefix(authHeader, "Bearer ")
@@ -57,9 +59,8 @@ func main() {
 		server.WithSSEContextFunc(authMiddleware),
 	)
 
-	log.Printf("BizSpark MCP server listening on %s", addr)
-	log.Printf("SSE endpoint:  http://localhost%s/sse", addr)
-	log.Printf("POST endpoint: http://localhost%s/message", addr)
+	log.Printf("BizSpark MCP server running on %s", addr)
+	log.Printf("Commerce DB: tenant schema per business")
 
 	if err := sseServer.Start(addr); err != nil {
 		log.Fatalf("Server failed: %v", err)
