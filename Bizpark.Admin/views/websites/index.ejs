@@ -14,6 +14,11 @@
     if (!url) return '';
     return /^https?:\/\//.test(url) ? url : `https://${url}`;
   };
+  const showingStart = pagination.total ? ((pagination.page - 1) * pagination.pageSize) + 1 : 0;
+  const showingEnd = Math.min(pagination.page * pagination.pageSize, pagination.total);
+  const pageEnd = Math.min(pagination.totalPages, Math.max(1, pagination.page - 2) + 4);
+  const pageStart = Math.max(1, pageEnd - 4);
+  const pageNumbers = Array.from({ length: pageEnd - pageStart + 1 }, (_, index) => pageStart + index);
 %>
 
 <section class="management-hero">
@@ -185,10 +190,8 @@
   <% }) %>
 
   <div class="pagination-bar">
-    <div>
-      Page <strong><%= pagination.page %></strong> of <strong><%= pagination.totalPages %></strong>
-    </div>
-    <form method="get" action="/admin/websites">
+    <p class="pagination-summary">Showing <strong><%= showingStart %>&ndash;<%= showingEnd %></strong> of <strong><%= pagination.total %></strong> results</p>
+    <form class="pagination-size" method="get" action="/admin/websites">
       <input type="hidden" name="search" value="<%= filters.search %>">
       <input type="hidden" name="business" value="<%= filters.business %>">
       <input type="hidden" name="status" value="<%= filters.status %>">
@@ -197,7 +200,7 @@
       <input type="hidden" name="sort" value="<%= filters.sort %>">
       <input type="hidden" name="businessId" value="<%= filters.businessId %>">
       <label>
-        Page size
+        Rows per page
         <select name="pageSize" onchange="this.form.submit()">
           <% [10, 25, 50].forEach((size) => { %>
             <option value="<%= size %>" <%= Number(filters.pageSize) === size ? 'selected' : '' %>><%= size %></option>
@@ -206,8 +209,11 @@
       </label>
     </form>
     <div class="pagination-actions">
-      <a class="button <%= pagination.hasPrevious ? '' : 'is-disabled' %>" href="/admin/websites?<%= queryFor({ page: pagination.page - 1 }) %>">Previous</a>
-      <a class="button <%= pagination.hasNext ? '' : 'is-disabled' %>" href="/admin/websites?<%= queryFor({ page: pagination.page + 1 }) %>">Next</a>
+      <a class="pagination-button <%= pagination.hasPrevious ? '' : 'is-disabled' %>" href="/admin/websites?<%= queryFor({ page: pagination.page - 1 }) %>">Previous</a>
+      <% pageNumbers.forEach((pageNumber) => { %>
+        <a class="pagination-page <%= pageNumber === pagination.page ? 'is-current' : '' %>" href="/admin/websites?<%= queryFor({ page: pageNumber }) %>"><%= pageNumber %></a>
+      <% }) %>
+      <a class="pagination-button <%= pagination.hasNext ? '' : 'is-disabled' %>" href="/admin/websites?<%= queryFor({ page: pagination.page + 1 }) %>">Next</a>
     </div>
   </div>
 </section>
