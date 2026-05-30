@@ -1908,7 +1908,10 @@ button {
 }
 
 .management-panel > form[id^="status-"],
-.management-panel > form[id^="delete-"] {
+.management-panel > form[id^="delete-"],
+.management-panel > form[id^="publish-"],
+.management-panel > form[id^="unpublish-"],
+.management-panel > form[id^="redeploy-"] {
   display: none;
 }
 
@@ -2041,6 +2044,42 @@ button {
 .badge--plan-promotional {
   background: #fef3f2;
   color: var(--danger);
+}
+
+.badge--template {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: #eef0f7;
+  color: #475467;
+}
+
+.badge--website-draft,
+.badge--website-unpublished {
+  background: #eef0f7;
+  color: #475467;
+}
+
+.badge--website-generating,
+.badge--website-pending_approval {
+  background: #eff8ff;
+  color: #175cd3;
+}
+
+.badge--website-published {
+  background: #ecfdf3;
+  color: #027a48;
+}
+
+.badge--website-failed,
+.badge--website-suspended {
+  background: #fef3f2;
+  color: var(--danger);
+}
+
+.website-table {
+  min-width: 1080px;
 }
 
 .row-actions {

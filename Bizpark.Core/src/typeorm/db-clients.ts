@@ -267,6 +267,16 @@ const createApplicationClient = () => ({
             repo.merge(existing, args.data);
             return repo.save(existing);
         },
+        delete: async (args: { where: { id: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiWebsiteEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) {
+                throw new Error(`Website ${args.where.id} not found`);
+            }
+            await repo.delete({ id: args.where.id });
+            return existing;
+        },
         count: async (args?: { where?: { status?: WebsiteStatus } }) => {
             const ds = await ensureDataSourceInitialized(getApplicationDataSource());
             return ds.getRepository(ApiWebsiteEntity).count({

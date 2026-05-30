@@ -1,8 +1,9 @@
-import { Controller, Get, Param, Post, Redirect, Render, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Query, Redirect, Render, Req, UseGuards } from '@nestjs/common';
 import { WebsiteStatus } from 'bizpark.core';
 import { AdminAuthGuard } from '../auth/admin-auth.guard';
 import type { AdminRequest } from '../common/admin-request';
 import { WebsitesService } from './websites.service';
+import type { WebsiteListQuery } from './websites.service';
 
 @Controller('admin/websites')
 @UseGuards(AdminAuthGuard)
@@ -11,13 +12,23 @@ export class WebsitesController {
 
   @Get()
   @Render('websites/index')
-  async index(@Req() request: AdminRequest) {
+  async index(@Req() request: AdminRequest, @Query() query: WebsiteListQuery) {
+    const websiteManagement = await this.websitesService.list(query);
     return {
       title: 'Websites',
       admin: request.adminUser,
-      websites: await this.websitesService.list(),
+      ...websiteManagement,
       statuses: Object.values(WebsiteStatus),
     };
+  }
+
+  @Post()
+  @Redirect('/admin/websites')
+  async create(
+    @Body() body: { businessId?: string; domain?: string; templateId?: string; status?: WebsiteStatus },
+    @Req() request: AdminRequest,
+  ) {
+    await this.websitesService.create(body, request.adminUser?.id);
   }
 
   @Get(':id')
@@ -56,5 +67,11 @@ export class WebsitesController {
   async redeploy(@Param('id') id: string, @Req() request: AdminRequest) {
     await this.websitesService.redeploy(id, request.adminUser?.id);
     return { url: `/admin/websites/${id}` };
+  }
+
+  @Post(':id/delete')
+  @Redirect('/admin/websites')
+  async delete(@Param('id') id: string, @Req() request: AdminRequest) {
+    await this.websitesService.delete(id, request.adminUser?.id);
   }
 }
