@@ -30,6 +30,7 @@ jobs:
       commerce: ${{ steps.filter.outputs.commerce }}
       commerce_web: ${{ steps.filter.outputs.commerce_web }}
       runner: ${{ steps.filter.outputs.runner }}
+      mcp: ${{ steps.filter.outputs.mcp }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
@@ -54,6 +55,9 @@ jobs:
             runner:
               - 'Bizpark.Runner.Py/**'
               - 'Dockerfile.runner'
+            mcp:
+              - 'Bizpark.MCP/**'
+              - 'Dockerfile.mcp'
 
   build-and-push:
     name: Build and push ${{ matrix.service }}
@@ -78,6 +82,9 @@ jobs:
           - service: runner
             image: bizpark-runner
             dockerfile: Dockerfile.runner
+          - service: mcp
+            image: bizpark-mcp
+            dockerfile: Dockerfile.mcp
 
     steps:
       - name: Checkout BE
@@ -117,6 +124,7 @@ jobs:
             commerce)     CHANGED="${{ needs.detect-changes.outputs.commerce }}" ;;
             commerce-web) CHANGED="${{ needs.detect-changes.outputs.commerce_web }}" ;;
             runner)       CHANGED="${{ needs.detect-changes.outputs.runner }}" ;;
+            mcp)          CHANGED="${{ needs.detect-changes.outputs.mcp }}" ;;
           esac
 
           if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || \
@@ -203,6 +211,7 @@ jobs:
               ("commerce", "ghcr.io/codesprint-bizspark/bizpark-commerce"),
               ("commerce-web", "ghcr.io/codesprint-bizspark/bizpark-commerce-web"),
               ("runner", "ghcr.io/codesprint-bizspark/bizpark-runner"),
+              ("mcp", "ghcr.io/codesprint-bizspark/bizpark-mcp"),
           ]
 
           missing = [service for service, _ in services if service not in digests]
