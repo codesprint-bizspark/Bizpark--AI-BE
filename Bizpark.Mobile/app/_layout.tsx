@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAppConfig } from '../src/context/AppConfigContext';
 import { ActivityIndicator, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
+import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Tenant resolution priority:
 //   1. Deep-link / QR scan param  → exp://host/--/?tenant=<id>
@@ -12,6 +13,7 @@ const ENV_TENANT_ID = process.env.EXPO_PUBLIC_TENANT_ID ?? null;
 
 function AppTabs() {
   const { config, isLoading } = useAppConfig();
+  const insets = useSafeAreaInsets();
 
   if (isLoading) {
     return (
@@ -48,9 +50,13 @@ function AppTabs() {
           tabBarStyle: {
             backgroundColor: config.backgroundColor,
             borderTopColor: '#e5e7eb',
-            height: 60,
-            paddingBottom: 8,
+            // Add the device's bottom safe-area inset so the tab bar sits
+            // ABOVE the Android gesture bar / iOS home indicator.
+            height: 60 + insets.bottom,
+            paddingBottom: insets.bottom + 8,
+            paddingTop: 8,
           },
+          tabBarItemStyle: { paddingVertical: 4 },
           headerStyle: { backgroundColor: config.primaryColor },
           headerTintColor: '#fff',
           headerTitleStyle: { fontWeight: '700' },
@@ -104,8 +110,10 @@ export default function RootLayout() {
   const tenantId = tenantFromLink || ENV_TENANT_ID;
 
   return (
-    <AppConfigProvider tenantId={tenantId}>
-      <AppTabs />
-    </AppConfigProvider>
+    <SafeAreaProvider>
+      <AppConfigProvider tenantId={tenantId}>
+        <AppTabs />
+      </AppConfigProvider>
+    </SafeAreaProvider>
   );
 }

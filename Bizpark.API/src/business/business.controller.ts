@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Body, Param, UseGuards, BadRequestException } from '@nestjs/common';
 import { BusinessService } from './business.service';
-import { applicationDb, CreateBusinessDto, SaveWebsiteConfigDto, WebsiteStatus, MobileAppStatus } from 'bizpark.core';
+import { applicationDb, CreateBusinessDto, SaveWebsiteConfigDto, WebsiteStatus, MobileAppStatus, MobileAppStoreStatus } from 'bizpark.core';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AgentService } from '../agent/agent.service';
@@ -204,5 +204,59 @@ export class BusinessController {
         });
 
         return { success: true, message: 'Mobile app build queued', data: queuedTask };
+    }
+
+    // ── App-store publishing: user requests, admin fulfils ────────────────────
+    @Post(':id/mobile-app/store-request')
+    async requestStorePublish(
+        @Param('id') id: string,
+        @Body() body: { platforms?: string[]; note?: string },
+        @CurrentUser() user: any,
+    ): Promise<any> {
+        const businesses = await this.businessService.getBusinessesForUser(user.id);
+        if (!businesses.find(b => b.id === id)) throw new Error('Unauthorized');
+
+        const mobileApp = await applicationDb.mobileApp.findFirstByBusinessId({ businessId: id });
+        if (!mobileApp) {
+            throw new BadRequestException('Generate and publish your mobile app config before requesting store publishing.');
+        }
+        if (mobileApp.status !== MobileAppStatus.PUBLISHED) {
+            throw new BadRequestException('Your mobile app config must be published first.');
+        }
+        if (mobileApp.storeStatus === MobileAppStoreStatus.REQUESTED || mobileApp.storeStatus === MobileAppStoreStatus.IN_REVIEW) {
+            throw new BadRequestException('A store publishing request is already in progress.');
+        }
+
+        const updated = await applicationDb.mobileApp.update({
+            where: { id: mobileApp.id },
+            data: {
+                storeStatus: MobileAppStoreStatus.REQUESTED,
+                storeRequestedAt: new Date(),
+                storeReviewedAt: null,
+                storeNote: body?.note?.trim() || null,
+            },
+        });
+
+        return { success: true, message: 'Store publishing requested — our team will review it.', data: updated };
+    }
+
+    @Get(':id/mobile-app/store-status')
+    async getStoreStatus(@Param('id') id: string, @CurrentUser() user: any): Promise<any> {
+        const businesses = await this.businessService.getBusinessesForUser(user.id);
+        if (!businesses.find(b => b.id === id)) throw new Error('Unauthorized');
+
+        const mobileApp = await applicationDb.mobileApp.findFirstByBusinessId({ businessId: id });
+        return {
+            success: true,
+            data: mobileApp ? {
+                configStatus: mobileApp.status,
+                storeStatus: mobileApp.storeStatus,
+                playStoreUrl: mobileApp.playStoreUrl,
+                appStoreUrl: mobileApp.appStoreUrl,
+                storeNote: mobileApp.storeNote,
+                storeRequestedAt: mobileApp.storeRequestedAt,
+                storeReviewedAt: mobileApp.storeReviewedAt,
+            } : null,
+        };
     }
 }

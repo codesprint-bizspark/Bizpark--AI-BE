@@ -307,6 +307,33 @@ const createApplicationClient = () => ({
                 order: { createdAt: 'DESC' },
             });
         },
+        findMany: async (args?: {
+            where?: { storeStatusIn?: string[] };
+            orderBy?: { storeRequestedAt?: OrderDirection; createdAt?: OrderDirection };
+        }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiMobileAppEntity);
+            const where = args?.where?.storeStatusIn?.length
+                ? { storeStatus: In(args.where.storeStatusIn) }
+                : undefined;
+            const order: Record<string, 'ASC' | 'DESC'> = {};
+            const reqOrder = resolveOrder(args?.orderBy?.storeRequestedAt);
+            const createdOrder = resolveOrder(args?.orderBy?.createdAt);
+            if (reqOrder) order.storeRequestedAt = reqOrder;
+            if (createdOrder) order.createdAt = createdOrder;
+            return repo.find({
+                where,
+                relations: ['business'],
+                order: Object.keys(order).length ? order : { createdAt: 'DESC' },
+            });
+        },
+        findUnique: async (args: { where: { id: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiMobileAppEntity).findOne({
+                where: { id: args.where.id },
+                relations: ['business'],
+            });
+        },
         upsert: async (args: {
             where: { businessId: string };
             update: Partial<ApiMobileAppEntity>;

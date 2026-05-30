@@ -43,6 +43,17 @@ export const MobileAppStatus = {
 } as const;
 export type MobileAppStatus = (typeof MobileAppStatus)[keyof typeof MobileAppStatus];
 
+// App-store publishing lifecycle — separate from the config status above.
+// User requests → admin reviews (can take weeks) → admin publishes with store links.
+export const MobileAppStoreStatus = {
+    NONE: 'NONE',             // never requested
+    REQUESTED: 'REQUESTED',   // user submitted a publish request
+    IN_REVIEW: 'IN_REVIEW',   // admin is processing / store review in progress
+    PUBLISHED: 'PUBLISHED',   // live on store(s), links available
+    REJECTED: 'REJECTED',     // admin declined
+} as const;
+export type MobileAppStoreStatus = (typeof MobileAppStoreStatus)[keyof typeof MobileAppStoreStatus];
+
 export const AdminRole = {
     SUPER_ADMIN: 'SUPER_ADMIN',
     ADMIN: 'ADMIN',

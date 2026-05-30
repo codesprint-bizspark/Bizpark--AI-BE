@@ -1,5 +1,5 @@
 import { Column, Entity, JoinColumn, ManyToOne } from 'typeorm';
-import { BaseEntityWithTimestamps, MobileAppStatus } from '../shared';
+import { BaseEntityWithTimestamps, MobileAppStatus, MobileAppStoreStatus } from '../shared';
 import { ApiBusinessEntity } from './business.entity';
 
 @Entity({ name: 'MobileApp' })
@@ -26,6 +26,31 @@ export class ApiMobileAppEntity extends BaseEntityWithTimestamps {
 
     @Column({ type: 'timestamptz', nullable: true })
     suspendedAt!: Date | null;
+
+    // ── App-store publishing ──────────────────────────────────────────────
+    @Column({
+        type: 'enum',
+        enum: MobileAppStoreStatus,
+        enumName: 'MobileAppStoreStatus',
+        default: MobileAppStoreStatus.NONE,
+    })
+    storeStatus!: MobileAppStoreStatus;
+
+    @Column({ type: 'text', nullable: true })
+    playStoreUrl!: string | null;
+
+    @Column({ type: 'text', nullable: true })
+    appStoreUrl!: string | null;
+
+    // Admin note shown to the user (e.g. rejection reason, review ETA)
+    @Column({ type: 'text', nullable: true })
+    storeNote!: string | null;
+
+    @Column({ type: 'timestamptz', nullable: true })
+    storeRequestedAt!: Date | null;
+
+    @Column({ type: 'timestamptz', nullable: true })
+    storeReviewedAt!: Date | null;
 
     @ManyToOne(() => ApiBusinessEntity, (business) => business.mobileApps, { onDelete: 'CASCADE' })
     @JoinColumn({ name: 'businessId' })

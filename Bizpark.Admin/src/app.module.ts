@@ -8,6 +8,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { BusinessesModule } from './businesses/businesses.module';
 import { UsersModule } from './users/users.module';
 import { WebsitesModule } from './websites/websites.module';
+import { MobileAppsModule } from './mobile-apps/mobile-apps.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { AgentTasksModule } from './agent-tasks/agent-tasks.module';
 
@@ -28,6 +29,7 @@ const redisPort = Number(process.env.REDIS_PORT || 6379);
     BusinessesModule,
     UsersModule,
     WebsitesModule,
+    MobileAppsModule,
     SubscriptionsModule,
     AgentTasksModule,
   ],
