@@ -4,3 +4,4 @@ export * from './dtos/auth.dto';
 export * from './dtos/save-website-config.dto';
 export * from './dtos/social-media.dto';
 export * from './json-types';
+export * from './subscription-plans';

@@ -1,16 +1,38 @@
 <%- include('../partials/header') %>
-<table class="table">
-  <thead><tr><th>Business</th><th>Tier</th><th>Status</th><th>Started</th><th>Expires</th></tr></thead>
-  <tbody>
-    <% subscriptions.forEach((subscription) => { %>
-      <tr>
-        <td><a href="/admin/businesses/<%= subscription.businessId %>"><%= subscription.business?.name || subscription.businessId %></a></td>
-        <td><span class="badge"><%= subscription.tier %></span></td>
-        <td><span class="badge"><%= subscription.status %></span></td>
-        <td><%= subscription.startedAt ? subscription.startedAt.toISOString().slice(0, 10) : '-' %></td>
-        <td><%= subscription.expiresAt ? subscription.expiresAt.toISOString().slice(0, 10) : '-' %></td>
-      </tr>
-    <% }) %>
-  </tbody>
-</table>
+<div class="grid">
+  <% plans.forEach((plan) => { %>
+    <section class="card">
+      <h2><%= plan.name %> <span class="badge"><%= plan.tier %></span></h2>
+      <p class="metric">$<%= plan.priceMonthly %><span class="muted" style="font-size: 15px;"> /mo</span></p>
+      <% if (plan.isPopular) { %>
+        <p><span class="badge">MOST POPULAR</span></p>
+      <% } %>
+      <form class="stack" method="post" action="/admin/subscriptions/plans/<%= plan.tier %>">
+        <label>Name<br>
+          <input type="text" name="name" value="<%= plan.name %>">
+        </label>
+        <label>Monthly Price<br>
+          <input type="number" min="0" step="0.01" name="priceMonthly" value="<%= plan.priceMonthly %>">
+        </label>
+        <label>Currency<br>
+          <input type="text" name="currency" value="<%= plan.currency %>">
+        </label>
+        <label>Description<br>
+          <input type="text" name="description" value="<%= plan.description %>">
+        </label>
+        <label>CTA Text<br>
+          <input type="text" name="ctaText" value="<%= plan.ctaText %>">
+        </label>
+        <label>
+          <input type="checkbox" name="isPopular" <%= plan.isPopular ? 'checked' : '' %>>
+          Most popular
+        </label>
+        <label>Benefits<br>
+          <textarea name="benefits" rows="7"><%= plan.benefits.join('\n') %></textarea>
+        </label>
+        <button type="submit">Save Plan</button>
+      </form>
+    </section>
+  <% }) %>
+</div>
 <%- include('../partials/footer') %>

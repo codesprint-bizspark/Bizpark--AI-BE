@@ -272,7 +272,8 @@ label {
 button,
 .button,
 select,
-input {
+input,
+textarea {
   min-height: 42px;
   border: 1px solid #d9dbea;
   border-radius: 8px;
@@ -282,10 +283,23 @@ input {
 }
 
 input,
-select {
+select,
+textarea {
   margin-top: 6px;
   background: #fff;
   color: var(--ink);
+}
+
+textarea {
+  width: 100%;
+  resize: vertical;
+  font-family: inherit;
+  line-height: 1.45;
+}
+
+input[type="checkbox"] {
+  min-height: auto;
+  margin-right: 8px;
 }
 
 button,
