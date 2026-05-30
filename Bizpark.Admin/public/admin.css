@@ -910,6 +910,202 @@ input[type="checkbox"] {
   text-transform: none;
 }
 
+.task-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.task-metric-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(16, 23, 42, 0.05);
+}
+
+.task-metric-card span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.task-metric-card strong {
+  color: var(--ink);
+  font-size: 30px;
+  line-height: 1;
+}
+
+.task-metric-card--danger {
+  border-color: rgba(180, 35, 24, 0.22);
+}
+
+.task-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.task-summary-card {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(16, 23, 42, 0.05);
+}
+
+.task-summary-card h2,
+.task-table-header h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 17px;
+}
+
+.task-bars {
+  display: grid;
+  gap: 10px;
+}
+
+.task-bar-row {
+  display: grid;
+  grid-template-columns: 64px minmax(0, 1fr) 28px;
+  gap: 10px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.task-bar-track {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #f0f1f7;
+}
+
+.task-bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: var(--purple);
+}
+
+.task-bar-row strong {
+  color: var(--ink);
+  text-align: right;
+}
+
+.task-filter-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, 1.5fr) repeat(5, minmax(140px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(16, 23, 42, 0.05);
+}
+
+.task-filter-field {
+  display: grid;
+  gap: 6px;
+}
+
+.task-filter-field label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.task-filter-field input,
+.task-filter-field select {
+  width: 100%;
+  margin-top: 0;
+}
+
+.task-table-shell {
+  display: grid;
+  gap: 12px;
+}
+
+.task-table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.task-table-header span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.task-table td small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  word-break: break-all;
+}
+
+.task-table td strong {
+  display: block;
+  color: var(--ink);
+}
+
+.task-status {
+  display: inline-flex;
+  border-radius: 999px;
+  background: #f3f4f8;
+  color: var(--muted);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.task-status--completed {
+  background: #e9f8ef;
+  color: #027a48;
+}
+
+.task-status--failed {
+  background: #fff0ee;
+  color: var(--danger);
+}
+
+.task-status--queued,
+.task-status--processing,
+.task-status--pending-approval {
+  background: var(--purple-soft);
+  color: var(--purple);
+}
+
+.task-state {
+  padding: 18px;
+  border: 1px dashed var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-weight: 800;
+  text-align: center;
+}
+
+.task-state--error {
+  border-color: rgba(180, 35, 24, 0.35);
+  background: #fff7f6;
+  color: var(--danger);
+}
+
 button,
 .button {
   background: var(--purple);
@@ -1033,6 +1229,15 @@ pre {
     justify-content: start;
     min-width: 0;
   }
+
+  .task-metrics-grid,
+  .task-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .task-filter-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 @media (max-width: 760px) {
@@ -1075,6 +1280,16 @@ pre {
 
   .dialog-header,
   .dialog-actions {
+    display: grid;
+  }
+
+  .task-metrics-grid,
+  .task-summary-grid,
+  .task-filter-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .task-table-header {
     display: grid;
   }
 }
