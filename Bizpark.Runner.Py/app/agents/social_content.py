@@ -76,10 +76,10 @@ async def _try_minimax_image(prompt: str) -> str:
 
 
 async def _generate_image_url(prompt: str) -> str:
-    """Generate image — OpenAI first, MiniMax fallback, each with one retry."""
+    """Generate image — MiniMax first, OpenAI fallback, each with one retry."""
     providers = [
-        ("OpenAI",   _try_openai_image),
         ("MiniMax",  _try_minimax_image),
+        ("OpenAI",   _try_openai_image),
     ]
 
     last_exc: Exception = RuntimeError("No image provider available")

@@ -216,11 +216,11 @@ Return ONLY a valid JSON object — no markdown, no explanation:
         raw = re.sub(r"\n?```\s*$", "", raw.strip()).strip()
         return json.loads(raw)
 
-    # Fallback chain: OpenAI → Gemini → MiniMax
+    # Fallback chain: Gemini → MiniMax → OpenAI (OpenAI last due to quota limits)
     candidates = [
-        ("OpenAI",   _get_openai()),
         ("Gemini",   _get_gemini()),
         ("MiniMax",  _get_minimax()),
+        ("OpenAI",   _get_openai()),
     ]
     candidates = [(name, llm) for name, llm in candidates if llm]
     if not candidates:
