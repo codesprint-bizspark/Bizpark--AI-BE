@@ -15,6 +15,7 @@ import {
     ApiSubscriptionEntity,
     ApiGoogleBusinessConnectionEntity,
     ApiGoogleBusinessReviewEntity,
+    ApiMcpApiKeyEntity,
     ApiUserEntity,
     ApiWebsiteEntity,
     BusinessStatus,
@@ -646,6 +647,45 @@ const createApplicationClient = () => ({
             if (!existing) {
                 throw new Error(`Google review ${args.where.id} not found`);
             }
+            repo.merge(existing, args.data);
+            return repo.save(existing);
+        },
+    },
+    mcpApiKey: {
+        findMany: async (args: {
+            where?: { businessId?: string; revokedAt?: null };
+            orderBy?: { createdAt?: OrderDirection };
+        }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiMcpApiKeyEntity);
+            const where: Record<string, unknown> = {};
+            if (args.where?.businessId) where.businessId = args.where.businessId;
+            if ('revokedAt' in (args.where ?? {}) && args.where?.revokedAt === null) where.revokedAt = IsNull();
+            const order: Record<string, 'ASC' | 'DESC'> = {};
+            const createdOrder = resolveOrder(args.orderBy?.createdAt);
+            if (createdOrder) order.createdAt = createdOrder;
+            return repo.find({
+                where: Object.keys(where).length ? where : undefined,
+                order: Object.keys(order).length ? order : undefined,
+            });
+        },
+        findUnique: async (args: { where: { id?: string; keyHash?: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiMcpApiKeyEntity);
+            if (args.where.id) return repo.findOne({ where: { id: args.where.id } });
+            if (args.where.keyHash) return repo.findOne({ where: { keyHash: args.where.keyHash } });
+            return null;
+        },
+        create: async (args: { data: Partial<ApiMcpApiKeyEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiMcpApiKeyEntity);
+            return repo.save(repo.create(args.data));
+        },
+        update: async (args: { where: { id: string }; data: Partial<ApiMcpApiKeyEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiMcpApiKeyEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) throw new Error(`McpApiKey ${args.where.id} not found`);
             repo.merge(existing, args.data);
             return repo.save(existing);
         },
