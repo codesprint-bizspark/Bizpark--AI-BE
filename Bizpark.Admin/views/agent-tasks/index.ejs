@@ -1,16 +1,212 @@
 <%- include('../partials/header') %>
-<table class="table">
-  <thead><tr><th>Task</th><th>Business</th><th>Type</th><th>Status</th><th>Created</th></tr></thead>
-  <tbody>
-    <% tasks.forEach((task) => { %>
+
+<section class="task-metrics-grid">
+  <article class="task-metric-card">
+    <span>Total tasks today</span>
+    <strong><%= metrics.totalToday %></strong>
+  </article>
+  <article class="task-metric-card">
+    <span>Tasks this week</span>
+    <strong><%= metrics.totalWeek %></strong>
+  </article>
+  <article class="task-metric-card">
+    <span>Tasks this month</span>
+    <strong><%= metrics.totalMonth %></strong>
+  </article>
+  <article class="task-metric-card">
+    <span>Completed tasks</span>
+    <strong><%= metrics.completed %></strong>
+  </article>
+  <article class="task-metric-card task-metric-card--danger">
+    <span>Failed tasks</span>
+    <strong><%= metrics.failed %></strong>
+  </article>
+</section>
+
+<section class="task-summary-grid">
+  <% [
+    { title: 'Tasks per day', points: summaries.perDay },
+    { title: 'Tasks per week', points: summaries.perWeek },
+    { title: 'Tasks per month', points: summaries.perMonth },
+  ].forEach((summary) => {
+    const maxCount = Math.max(...summary.points.map((point) => point.count), 1);
+  %>
+    <article class="task-summary-card">
+      <h2><%= summary.title %></h2>
+      <div class="task-bars">
+        <% summary.points.forEach((point) => { %>
+          <div class="task-bar-row">
+            <span><%= point.label %></span>
+            <div class="task-bar-track">
+              <div class="task-bar-fill" style="width: <%= Math.max((point.count / maxCount) * 100, point.count ? 8 : 0) %>%"></div>
+            </div>
+            <strong><%= point.count %></strong>
+          </div>
+        <% }) %>
+      </div>
+    </article>
+  <% }) %>
+</section>
+
+<section class="task-filter-panel" aria-label="Agent task filters">
+  <div class="task-filter-field task-filter-field--search">
+    <label for="task-business-search">Business name</label>
+    <input id="task-business-search" type="search" placeholder="Search by business">
+  </div>
+  <div class="task-filter-field">
+    <label for="task-status-filter">Status</label>
+    <select id="task-status-filter">
+      <option value="ALL">All statuses</option>
+      <option value="PENDING">Pending</option>
+      <% statusOptions.forEach((status) => { %>
+        <option value="<%= status %>"><%= status.replace('_', ' ') %></option>
+      <% }) %>
+    </select>
+  </div>
+  <div class="task-filter-field">
+    <label for="task-type-filter">Type</label>
+    <select id="task-type-filter">
+      <option value="ALL">All types</option>
+      <% typeOptions.forEach((type) => { %>
+        <option value="<%= type %>"><%= type.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase()) %></option>
+      <% }) %>
+    </select>
+  </div>
+  <div class="task-filter-field">
+    <label for="task-date-from">From</label>
+    <input id="task-date-from" type="date">
+  </div>
+  <div class="task-filter-field">
+    <label for="task-date-to">To</label>
+    <input id="task-date-to" type="date">
+  </div>
+  <div class="task-filter-field">
+    <label for="task-sort">Sort</label>
+    <select id="task-sort">
+      <option value="newest">Newest first</option>
+      <option value="oldest">Oldest first</option>
+      <option value="status">Status</option>
+      <option value="type">Task type</option>
+      <option value="business">Business name</option>
+    </select>
+  </div>
+</section>
+
+<section class="task-table-shell">
+  <div class="task-table-header">
+    <h2>Task Monitor</h2>
+    <span id="task-visible-count"><%= tasks.length %> tasks</span>
+  </div>
+
+  <div class="task-state task-state--loading" id="task-loading" hidden>Loading task data...</div>
+  <div class="task-state task-state--error" id="task-error" hidden>Unable to apply filters. Refresh the page and try again.</div>
+  <div class="task-state" id="task-empty" <%= tasks.length ? 'hidden' : '' %>>No agent tasks found.</div>
+  <div class="task-state" id="task-filter-empty" hidden>No tasks match the current filters.</div>
+
+  <table class="table task-table" id="agent-task-table">
+    <thead>
       <tr>
-        <td><a href="/admin/agent-tasks/<%= task.id %>"><%= task.id %></a></td>
-        <td><%= task.businessId %></td>
-        <td><%= task.taskType %></td>
-        <td><span class="badge"><%= task.status %></span></td>
-        <td><%= task.createdAt ? task.createdAt.toISOString().slice(0, 16).replace('T', ' ') : '-' %></td>
+        <th>Task</th>
+        <th>Business</th>
+        <th>Type</th>
+        <th>Status</th>
+        <th>Created</th>
       </tr>
-    <% }) %>
-  </tbody>
-</table>
+    </thead>
+    <tbody id="agent-task-body">
+      <% tasks.forEach((task) => { %>
+        <tr
+          data-task-row
+          data-business="<%= task.businessName.toLowerCase() %>"
+          data-type="<%= task.taskType %>"
+          data-status="<%= task.status %>"
+          data-created="<%= task.createdAt ? task.createdAt.toISOString() : '' %>"
+        >
+          <td>
+            <a href="/admin/agent-tasks/<%= task.id %>"><%= task.taskLabel %></a>
+            <small><%= task.id %></small>
+          </td>
+          <td>
+            <strong><%= task.businessName %></strong>
+            <small><%= task.businessId %></small>
+          </td>
+          <td><%= task.taskTypeLabel %></td>
+          <td>
+            <span class="task-status task-status--<%= task.status.toLowerCase().replace('_', '-') %>">
+              <%= task.statusLabel %>
+            </span>
+          </td>
+          <td><%= task.createdAt ? task.createdAt.toISOString().slice(0, 16).replace('T', ' ') : '-' %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</section>
+
+<script>
+  const taskRows = Array.from(document.querySelectorAll('[data-task-row]'));
+  const body = document.getElementById('agent-task-body');
+  const businessSearch = document.getElementById('task-business-search');
+  const statusFilter = document.getElementById('task-status-filter');
+  const typeFilter = document.getElementById('task-type-filter');
+  const fromFilter = document.getElementById('task-date-from');
+  const toFilter = document.getElementById('task-date-to');
+  const sortFilter = document.getElementById('task-sort');
+  const visibleCount = document.getElementById('task-visible-count');
+  const emptyState = document.getElementById('task-empty');
+  const filteredEmptyState = document.getElementById('task-filter-empty');
+  const errorState = document.getElementById('task-error');
+  const pendingStatuses = new Set(['QUEUED', 'PROCESSING', 'PENDING_APPROVAL']);
+
+  function compareRows(left, right) {
+    const sort = sortFilter.value;
+    if (sort === 'oldest') return left.dataset.created.localeCompare(right.dataset.created);
+    if (sort === 'status') return left.dataset.status.localeCompare(right.dataset.status);
+    if (sort === 'type') return left.dataset.type.localeCompare(right.dataset.type);
+    if (sort === 'business') return left.dataset.business.localeCompare(right.dataset.business);
+    return right.dataset.created.localeCompare(left.dataset.created);
+  }
+
+  function taskMatches(row) {
+    const query = (businessSearch.value || '').trim().toLowerCase();
+    const status = statusFilter.value;
+    const type = typeFilter.value;
+    const created = row.dataset.created ? new Date(row.dataset.created) : null;
+    const from = fromFilter.value ? new Date(`${fromFilter.value}T00:00:00`) : null;
+    const to = toFilter.value ? new Date(`${toFilter.value}T23:59:59`) : null;
+
+    if (query && !row.dataset.business.includes(query)) return false;
+    if (status !== 'ALL' && status !== 'PENDING' && row.dataset.status !== status) return false;
+    if (status === 'PENDING' && !pendingStatuses.has(row.dataset.status)) return false;
+    if (type !== 'ALL' && row.dataset.type !== type) return false;
+    if (from && created && created < from) return false;
+    if (to && created && created > to) return false;
+    return true;
+  }
+
+  function applyTaskFilters() {
+    try {
+      errorState.hidden = true;
+      const sorted = [...taskRows].sort(compareRows);
+      let visible = 0;
+      sorted.forEach((row) => {
+        const matches = taskMatches(row);
+        row.hidden = !matches;
+        if (matches) visible += 1;
+        body.appendChild(row);
+      });
+      visibleCount.textContent = `${visible} task${visible === 1 ? '' : 's'}`;
+      emptyState.hidden = taskRows.length !== 0;
+      filteredEmptyState.hidden = taskRows.length === 0 || visible !== 0;
+    } catch {
+      errorState.hidden = false;
+    }
+  }
+
+  [businessSearch, statusFilter, typeFilter, fromFilter, toFilter, sortFilter].forEach((control) => {
+    control.addEventListener('input', applyTaskFilters);
+    control.addEventListener('change', applyTaskFilters);
+  });
+</script>
+
 <%- include('../partials/footer') %>

@@ -1,9 +1,10 @@
 <%- include('../partials/header') %>
 <div class="stack">
   <section class="card">
-    <h2><%= task.taskType %></h2>
-    <p>Business: <%= task.businessId %></p>
-    <p>Status: <span class="badge"><%= task.status %></span></p>
+    <h2><%= task.taskLabel %></h2>
+    <p class="muted">Task ID: <%= task.id %></p>
+    <p>Business: <strong><%= task.businessName %></strong> <span class="muted">(<%= task.businessId %>)</span></p>
+    <p>Status: <span class="badge"><%= task.statusLabel %></span></p>
     <div class="actions">
       <form method="post" action="/admin/agent-tasks/<%= task.id %>/approve"><button type="submit">Approve</button></form>
       <form method="post" action="/admin/agent-tasks/<%= task.id %>/reject"><button class="danger" type="submit">Reject</button></form>

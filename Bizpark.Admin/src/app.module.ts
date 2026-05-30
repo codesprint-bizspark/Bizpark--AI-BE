@@ -10,7 +10,6 @@ import { UsersModule } from './users/users.module';
 import { WebsitesModule } from './websites/websites.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
 import { AgentTasksModule } from './agent-tasks/agent-tasks.module';
-import { AuditLogsModule } from './audit-logs/audit-logs.module';
 
 const redisHost = process.env.REDIS_HOST || 'localhost';
 const redisPort = Number(process.env.REDIS_PORT || 6379);
@@ -31,7 +30,6 @@ const redisPort = Number(process.env.REDIS_PORT || 6379);
     WebsitesModule,
     SubscriptionsModule,
     AgentTasksModule,
-    AuditLogsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

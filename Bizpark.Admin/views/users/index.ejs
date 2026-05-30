@@ -1,15 +1,282 @@
 <%- include('../partials/header') %>
-<table class="table">
-  <thead><tr><th>Name</th><th>Email</th><th>Status</th><th>Businesses</th></tr></thead>
-  <tbody>
-    <% users.forEach((user) => { %>
-      <tr>
-        <td><a href="/admin/users/<%= user.id %>"><%= user.name %></a></td>
-        <td><%= user.email %></td>
-        <td><span class="badge"><%= user.isActive ? 'ACTIVE' : 'DISABLED' %></span></td>
-        <td><%= user.businesses?.length || 0 %></td>
-      </tr>
-    <% }) %>
-  </tbody>
-</table>
+<%
+  const queryFor = (overrides = {}) => {
+    const params = new URLSearchParams();
+    Object.entries({ ...filters, ...overrides }).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') params.set(key, value);
+    });
+    return params.toString();
+  };
+  const statusLabel = (user) => user.isActive ? 'Active' : 'Suspended';
+  const statusClass = (user) => user.isActive ? 'badge badge--status badge--status-active' : 'badge badge--status badge--status-suspended';
+  const accountType = (user) => {
+    const roles = [...new Set((user.businesses || []).map((businessUser) => businessUser.role))];
+    return roles.length ? roles.join(', ') : 'No business role';
+  };
+  const showingStart = pagination.total ? ((pagination.page - 1) * pagination.pageSize) + 1 : 0;
+  const showingEnd = Math.min(pagination.page * pagination.pageSize, pagination.total);
+  const pageEnd = Math.min(pagination.totalPages, Math.max(1, pagination.page - 2) + 4);
+  const pageStart = Math.max(1, pageEnd - 4);
+  const pageNumbers = Array.from({ length: pageEnd - pageStart + 1 }, (_, index) => pageStart + index);
+%>
+
+<section class="management-hero">
+  <div>
+    <span class="eyebrow">User Management</span>
+    <h2>Manage user access, business relationships, and account status.</h2>
+  </div>
+  <div class="management-hero-stats">
+    <span><strong><%= stats.total %></strong>Total</span>
+    <span><strong><%= stats.active %></strong>Active</span>
+    <span><strong><%= stats.suspended %></strong>Suspended</span>
+    <span><strong><%= stats.withoutBusinesses %></strong>No Businesses</span>
+  </div>
+  <button class="button button--primary" type="button" data-open-dialog="add-user-dialog">Add User</button>
+</section>
+
+<section class="compact-stat-grid">
+  <article class="compact-stat-card">
+    <span>Total Users</span>
+    <strong><%= stats.total %></strong>
+  </article>
+  <article class="compact-stat-card compact-stat-card--success">
+    <span>Active Users</span>
+    <strong><%= stats.active %></strong>
+  </article>
+  <article class="compact-stat-card compact-stat-card--danger">
+    <span>Suspended Users</span>
+    <strong><%= stats.suspended %></strong>
+  </article>
+  <article class="compact-stat-card">
+    <span>Multi-Business Users</span>
+    <strong><%= stats.multiBusiness %></strong>
+  </article>
+</section>
+
+<section class="management-panel">
+  <form class="management-filters user-filters" method="get" action="/admin/users">
+    <label>
+      Name
+      <input type="search" name="search" value="<%= filters.search %>" placeholder="Search by name">
+    </label>
+    <label>
+      Email
+      <input type="search" name="email" value="<%= filters.email %>" placeholder="Search by email">
+    </label>
+    <label>
+      Status
+      <select name="status">
+        <option value="">All statuses</option>
+        <option value="active" <%= filters.status === 'active' ? 'selected' : '' %>>Active</option>
+        <option value="suspended" <%= filters.status === 'suspended' ? 'selected' : '' %>>Suspended</option>
+      </select>
+    </label>
+    <label>
+      Businesses
+      <select name="businessCount">
+        <option value="">Any count</option>
+        <option value="none" <%= filters.businessCount === 'none' ? 'selected' : '' %>>No businesses</option>
+        <option value="one" <%= filters.businessCount === 'one' ? 'selected' : '' %>>One business</option>
+        <option value="multi" <%= filters.businessCount === 'multi' ? 'selected' : '' %>>Multiple businesses</option>
+      </select>
+    </label>
+    <label>
+      Registered
+      <select name="registered">
+        <option value="">Any time</option>
+        <option value="7" <%= filters.registered === '7' ? 'selected' : '' %>>Last 7 days</option>
+        <option value="30" <%= filters.registered === '30' ? 'selected' : '' %>>Last 30 days</option>
+        <option value="90" <%= filters.registered === '90' ? 'selected' : '' %>>Last 90 days</option>
+      </select>
+    </label>
+    <label>
+      Sort
+      <select name="sort">
+        <option value="newest" <%= filters.sort === 'newest' ? 'selected' : '' %>>Newest first</option>
+        <option value="oldest" <%= filters.sort === 'oldest' ? 'selected' : '' %>>Oldest first</option>
+        <option value="name" <%= filters.sort === 'name' ? 'selected' : '' %>>Name</option>
+        <option value="email" <%= filters.sort === 'email' ? 'selected' : '' %>>Email</option>
+        <option value="status" <%= filters.sort === 'status' ? 'selected' : '' %>>Status</option>
+        <option value="businesses" <%= filters.sort === 'businesses' ? 'selected' : '' %>>Most businesses</option>
+      </select>
+    </label>
+    <input type="hidden" name="businessId" value="<%= filters.businessId %>">
+    <input type="hidden" name="pageSize" value="<%= filters.pageSize %>">
+    <div class="filter-actions">
+      <button class="button button--primary" type="submit">Apply</button>
+      <a class="button button--ghost" href="/admin/users">Clear Filters</a>
+    </div>
+  </form>
+
+  <form method="post" action="/admin/users/bulk" id="user-bulk-form">
+    <div class="bulk-toolbar">
+      <div>
+        <strong><%= pagination.total %></strong>
+        <span>users found</span>
+      </div>
+      <div class="bulk-actions">
+        <select name="action" required>
+          <option value="">Bulk action</option>
+          <option value="activate">Activate Selected</option>
+          <option value="suspend">Suspend Selected</option>
+          <option value="delete">Delete Selected</option>
+        </select>
+        <button class="button" type="submit">Apply</button>
+      </div>
+    </div>
+
+    <div class="management-table-wrap">
+      <table class="table management-table user-table">
+        <thead>
+          <tr>
+            <th class="select-column"><input type="checkbox" data-select-all-users aria-label="Select all users"></th>
+            <th>User</th>
+            <th>Status</th>
+            <th>Businesses</th>
+            <th>Last Login</th>
+            <th>Registered Date</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% if (users.length) { %>
+            <% users.forEach((user) => { %>
+              <tr>
+                <td class="select-column"><input type="checkbox" name="userIds" value="<%= user.id %>" aria-label="Select <%= user.name %>"></td>
+                <td>
+                  <a class="entity-title" href="/admin/users/<%= user.id %>"><%= user.name || 'Unnamed User' %></a>
+                  <small class="secondary-text"><%= user.email || 'No email available' %> | <%= accountType(user) %></small>
+                </td>
+                <td><span class="<%= statusClass(user) %>"><%= statusLabel(user) %></span></td>
+                <td>
+                  <a href="/admin/businesses?search=<%= encodeURIComponent(user.email || user.name || '') %>"><%= user.businesses?.length || 0 %></a>
+                </td>
+                <td><span class="secondary-text">Not tracked</span></td>
+                <td><%= user.createdAt.toISOString().slice(0, 10) %></td>
+                <td>
+                  <details class="row-actions">
+                    <summary>Actions</summary>
+                    <div>
+                      <a href="/admin/users/<%= user.id %>">View User</a>
+                      <a href="/admin/users/<%= user.id %>">Edit User</a>
+                      <a href="/admin/businesses?search=<%= encodeURIComponent(user.email || user.name || '') %>">View Businesses</a>
+                      <% if (user.isActive) { %>
+                        <button type="submit" form="status-<%= user.id %>-suspended">Suspend User</button>
+                      <% } else { %>
+                        <button type="submit" form="status-<%= user.id %>-active">Activate User</button>
+                      <% } %>
+                      <button type="submit" form="reset-<%= user.id %>">Reset Password</button>
+                      <button class="danger-text" type="submit" form="delete-<%= user.id %>">Delete User</button>
+                    </div>
+                  </details>
+                </td>
+              </tr>
+            <% }) %>
+          <% } else { %>
+            <tr>
+              <td colspan="7">
+                <div class="empty-state">
+                  <strong>No users found</strong>
+                  <p>Try changing the search or filters, or add a new user.</p>
+                </div>
+              </td>
+            </tr>
+          <% } %>
+        </tbody>
+      </table>
+    </div>
+  </form>
+
+  <% users.forEach((user) => { %>
+    <form id="status-<%= user.id %>-active" method="post" action="/admin/users/<%= user.id %>/status">
+      <input type="hidden" name="isActive" value="true">
+    </form>
+    <form id="status-<%= user.id %>-suspended" method="post" action="/admin/users/<%= user.id %>/status">
+      <input type="hidden" name="isActive" value="false">
+    </form>
+    <form id="reset-<%= user.id %>" method="post" action="/admin/users/<%= user.id %>/reset-password"></form>
+    <form id="delete-<%= user.id %>" method="post" action="/admin/users/<%= user.id %>/delete"></form>
+  <% }) %>
+
+  <div class="pagination-bar">
+    <p class="pagination-summary">Showing <strong><%= showingStart %>&ndash;<%= showingEnd %></strong> of <strong><%= pagination.total %></strong> results</p>
+    <form class="pagination-size" method="get" action="/admin/users">
+      <input type="hidden" name="search" value="<%= filters.search %>">
+      <input type="hidden" name="email" value="<%= filters.email %>">
+      <input type="hidden" name="status" value="<%= filters.status %>">
+      <input type="hidden" name="businessCount" value="<%= filters.businessCount %>">
+      <input type="hidden" name="registered" value="<%= filters.registered %>">
+      <input type="hidden" name="sort" value="<%= filters.sort %>">
+      <input type="hidden" name="businessId" value="<%= filters.businessId %>">
+      <label>
+        Rows per page
+        <select name="pageSize" onchange="this.form.submit()">
+          <% [10, 25, 50].forEach((size) => { %>
+            <option value="<%= size %>" <%= Number(filters.pageSize) === size ? 'selected' : '' %>><%= size %></option>
+          <% }) %>
+        </select>
+      </label>
+    </form>
+    <div class="pagination-actions">
+      <a class="pagination-button <%= pagination.hasPrevious ? '' : 'is-disabled' %>" href="/admin/users?<%= queryFor({ page: pagination.page - 1 }) %>">Previous</a>
+      <% pageNumbers.forEach((pageNumber) => { %>
+        <a class="pagination-page <%= pageNumber === pagination.page ? 'is-current' : '' %>" href="/admin/users?<%= queryFor({ page: pageNumber }) %>"><%= pageNumber %></a>
+      <% }) %>
+      <a class="pagination-button <%= pagination.hasNext ? '' : 'is-disabled' %>" href="/admin/users?<%= queryFor({ page: pagination.page + 1 }) %>">Next</a>
+    </div>
+  </div>
+</section>
+
+<dialog class="admin-dialog" id="add-user-dialog">
+  <form method="post" action="/admin/users" class="dialog-card">
+    <div class="dialog-header">
+      <div>
+        <p class="eyebrow">New User</p>
+        <h2>Add User</h2>
+      </div>
+      <button type="button" class="icon-button" data-close-dialog aria-label="Close">&times;</button>
+    </div>
+    <label>
+      Name
+      <input name="name" required placeholder="Alex Morgan">
+    </label>
+    <label>
+      Email
+      <input name="email" type="email" required placeholder="alex@example.com">
+    </label>
+    <label>
+      Temporary Password
+      <input name="password" type="password" placeholder="Uses default temporary password if empty">
+    </label>
+    <div class="dialog-actions">
+      <button type="button" class="button button--ghost" data-close-dialog>Cancel</button>
+      <button type="submit" class="button button--primary">Create User</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  document.querySelector('[data-select-all-users]')?.addEventListener('change', (event) => {
+    document.querySelectorAll('input[name="userIds"]').forEach((checkbox) => {
+      checkbox.checked = event.target.checked;
+    });
+  });
+
+  document.querySelector('#user-bulk-form')?.addEventListener('submit', (event) => {
+    const selected = document.querySelectorAll('input[name="userIds"]:checked').length;
+    if (!selected) {
+      event.preventDefault();
+      alert('Select at least one user first.');
+    }
+  });
+
+  document.querySelectorAll('[data-open-dialog]').forEach((button) => {
+    button.addEventListener('click', () => document.getElementById(button.dataset.openDialog)?.showModal());
+  });
+
+  document.querySelectorAll('[data-close-dialog]').forEach((button) => {
+    button.addEventListener('click', () => button.closest('dialog')?.close());
+  });
+</script>
+
 <%- include('../partials/footer') %>

@@ -1,0 +1,130 @@
+<div class="plan-form-grid">
+  <div class="form-field" data-field="name">
+    <label for="plan-name-<%= plan.id || 'new' %>">
+      Plan Name <span class="required-marker">*</span>
+    </label>
+    <input id="plan-name-<%= plan.id || 'new' %>" type="text" name="name" value="<%= plan.name %>" data-required data-label="Plan Name">
+    <p class="field-helper">Customer-facing name, such as Spark Pro or Black Friday Offer.</p>
+    <p class="field-error" data-error-for="name"></p>
+  </div>
+
+  <div class="form-field" data-field="tier">
+    <label for="plan-tier-<%= plan.id || 'new' %>">
+      Plan Code <span class="required-marker">*</span>
+    </label>
+    <input id="plan-tier-<%= plan.id || 'new' %>" type="text" name="tier" value="<%= plan.tier %>" data-required data-label="Plan Code">
+    <p class="field-helper">Internal code used by billing and checkout, for example PRO or BLACK_FRIDAY.</p>
+    <p class="field-error" data-error-for="tier"></p>
+  </div>
+
+  <div class="form-field" data-field="type">
+    <label for="plan-type-<%= plan.id || 'new' %>">
+      Plan Type <span class="required-marker">*</span>
+    </label>
+    <select id="plan-type-<%= plan.id || 'new' %>" name="type" data-required data-label="Plan Type">
+      <% planTypes.forEach((type) => { %>
+        <option value="<%= type %>" <%= plan.type === type ? 'selected' : '' %>><%= type.replace('_', ' ') %></option>
+      <% }) %>
+    </select>
+    <p class="field-error" data-error-for="type"></p>
+  </div>
+
+  <div class="form-field" data-field="status">
+    <label for="plan-status-<%= plan.id || 'new' %>">
+      Status <span class="required-marker">*</span>
+    </label>
+    <select id="plan-status-<%= plan.id || 'new' %>" name="status" data-required data-label="Status">
+      <% planStatuses.forEach((status) => { %>
+        <option value="<%= status %>" <%= plan.status === status ? 'selected' : '' %>><%= status %></option>
+      <% }) %>
+    </select>
+    <p class="field-helper">Draft hides the plan; scheduled and active plans can appear publicly.</p>
+    <p class="field-error" data-error-for="status"></p>
+  </div>
+
+  <div class="form-field" data-field="priceMonthly">
+    <label for="plan-price-<%= plan.id || 'new' %>">
+      Monthly Price <span class="required-marker">*</span>
+    </label>
+    <input id="plan-price-<%= plan.id || 'new' %>" type="number" min="0" step="0.01" name="priceMonthly" value="<%= plan.priceMonthly %>" data-required data-label="Monthly Price">
+    <p class="field-error" data-error-for="priceMonthly"></p>
+  </div>
+
+  <div class="form-field" data-field="currency">
+    <label for="plan-currency-<%= plan.id || 'new' %>">
+      Currency <span class="required-marker">*</span>
+    </label>
+    <input id="plan-currency-<%= plan.id || 'new' %>" type="text" name="currency" value="<%= plan.currency %>" data-required data-label="Currency">
+    <p class="field-helper">Use a 3-letter code such as USD or LKR.</p>
+    <p class="field-error" data-error-for="currency"></p>
+  </div>
+
+  <div class="form-field" data-field="originalPriceMonthly">
+    <label for="plan-original-price-<%= plan.id || 'new' %>">Original Price</label>
+    <input id="plan-original-price-<%= plan.id || 'new' %>" type="number" min="0" step="0.01" name="originalPriceMonthly" value="<%= plan.originalPriceMonthly || '' %>">
+  </div>
+
+  <div class="form-field" data-field="discountPercentage">
+    <label for="plan-discount-<%= plan.id || 'new' %>">Discount %</label>
+    <input id="plan-discount-<%= plan.id || 'new' %>" type="number" min="0" max="100" step="1" name="discountPercentage" value="<%= plan.discountPercentage || '' %>">
+  </div>
+
+  <div class="form-field span-2" data-field="description">
+    <label for="plan-description-<%= plan.id || 'new' %>">Description</label>
+    <textarea id="plan-description-<%= plan.id || 'new' %>" name="description" rows="3"><%= plan.description %></textarea>
+    <p class="field-helper">Short explanation shown on pricing cards and promotion previews.</p>
+  </div>
+
+  <div class="form-field" data-field="ctaText">
+    <label for="plan-cta-<%= plan.id || 'new' %>">CTA Text</label>
+    <input id="plan-cta-<%= plan.id || 'new' %>" type="text" name="ctaText" value="<%= plan.ctaText %>">
+  </div>
+
+  <div class="form-field" data-field="badgeText">
+    <label for="plan-badge-<%= plan.id || 'new' %>">Badge Text</label>
+    <input id="plan-badge-<%= plan.id || 'new' %>" type="text" name="badgeText" value="<%= plan.badgeText %>" placeholder="50% OFF">
+    <p class="field-helper">Optional label like Most Popular, Limited Time, or Best Deal.</p>
+  </div>
+
+  <div class="form-field" data-field="startsAt">
+    <label for="plan-starts-<%= plan.id || 'new' %>">Start Date & Time</label>
+    <input id="plan-starts-<%= plan.id || 'new' %>" type="datetime-local" name="startsAt" value="<%= dateValue(plan.startsAt) %>">
+  </div>
+
+  <div class="form-field" data-field="endsAt">
+    <label for="plan-ends-<%= plan.id || 'new' %>">End Date & Time</label>
+    <input id="plan-ends-<%= plan.id || 'new' %>" type="datetime-local" name="endsAt" value="<%= dateValue(plan.endsAt) %>">
+  </div>
+
+  <div class="form-field" data-field="timezone">
+    <label for="plan-timezone-<%= plan.id || 'new' %>">Timezone</label>
+    <select id="plan-timezone-<%= plan.id || 'new' %>" name="timezone">
+      <% timezones.forEach((timezone) => { %>
+        <option value="<%= timezone %>" <%= plan.timezone === timezone ? 'selected' : '' %>><%= timezone %></option>
+      <% }) %>
+    </select>
+  </div>
+
+  <label class="plan-check span-1">
+    <input type="checkbox" name="isPopular" <%= plan.isPopular ? 'checked' : '' %>>
+    Featured badge
+  </label>
+
+  <div class="feature-editor span-2">
+    <div class="feature-editor-header">
+      <label>Features List</label>
+      <button type="button" class="secondary" onclick="addFeature(this)">Add Feature</button>
+    </div>
+    <p class="field-helper">Add one feature per row. Use Up and Down to control display order.</p>
+    <div class="feature-list">
+      <% (plan.benefits && plan.benefits.length ? plan.benefits : ['']).forEach((benefit) => { %>
+        <div class="feature-row">
+          <input type="text" name="benefits" value="<%= benefit %>">
+          <button type="button" class="secondary" onclick="moveFeature(this, -1)">Up</button>
+          <button type="button" class="secondary" onclick="moveFeature(this, 1)">Down</button>
+          <button type="button" class="danger" onclick="removeFeature(this)">Remove</button>
+        </div>
+      <% }) %>
+    </div>
+  </div>
+</div>
