@@ -1,12 +1,14 @@
 import { AppConfigProvider } from '../src/context/AppConfigContext';
-import { Tabs } from 'expo-router';
+import { Tabs, useGlobalSearchParams } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppConfig } from '../src/context/AppConfigContext';
 import { ActivityIndicator, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 
-// Read tenant from env var — in production, each client build bakes in their own
-const TENANT_ID = process.env.EXPO_PUBLIC_TENANT_ID ?? null;
+// Tenant resolution priority:
+//   1. Deep-link / QR scan param  → exp://host/--/?tenant=<id>
+//   2. EXPO_PUBLIC_TENANT_ID env  → baked-in per-client build
+const ENV_TENANT_ID = process.env.EXPO_PUBLIC_TENANT_ID ?? null;
 
 function AppTabs() {
   const { config, isLoading } = useAppConfig();
@@ -97,8 +99,12 @@ function AppTabs() {
 }
 
 export default function RootLayout() {
+  const params = useGlobalSearchParams<{ tenant?: string }>();
+  const tenantFromLink = typeof params.tenant === 'string' ? params.tenant : null;
+  const tenantId = tenantFromLink || ENV_TENANT_ID;
+
   return (
-    <AppConfigProvider tenantId={TENANT_ID}>
+    <AppConfigProvider tenantId={tenantId}>
       <AppTabs />
     </AppConfigProvider>
   );

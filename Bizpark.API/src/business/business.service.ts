@@ -30,7 +30,7 @@ export class BusinessService {
     async getBusinessById(id: string): Promise<any> {
         return applicationDb.business.findUnique({
             where: { id },
-            include: { websites: true }
+            include: { websites: true, mobileApps: true }
         });
     }
 

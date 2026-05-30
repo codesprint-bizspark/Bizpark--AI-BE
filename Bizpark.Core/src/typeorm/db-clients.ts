@@ -178,12 +178,15 @@ const createApplicationClient = () => ({
 
             return qb.getMany();
         },
-        findUnique: async (args: { where: { id: string }; include?: { websites?: boolean } }) => {
+        findUnique: async (args: { where: { id: string }; include?: { websites?: boolean; mobileApps?: boolean } }) => {
             const ds = await ensureDataSourceInitialized(getApplicationDataSource());
             const repo = ds.getRepository(ApiBusinessEntity);
+            const relations: string[] = [];
+            if (args.include?.websites) relations.push('websites');
+            if (args.include?.mobileApps) relations.push('mobileApps');
             return repo.findOne({
                 where: { id: args.where.id },
-                relations: args.include?.websites ? ['websites'] : [],
+                relations,
             });
         },
         findForAdmin: async (args?: { orderBy?: { createdAt?: OrderDirection } }) => {
