@@ -41,7 +41,18 @@
       "typedRoutes": true
     },
     "extra": {
-      "COMMERCE_URL": "http://10.193.30.83:3003"
+      "COMMERCE_URL": "http://10.193.30.83:3003",
+      "router": {},
+      "eas": {
+        "projectId": "9a5827a0-38ee-4405-ba8c-0576a8539bd4"
+      }
+    },
+    "owner": "adithaf7",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/9a5827a0-38ee-4405-ba8c-0576a8539bd4"
     }
   }
 }
