@@ -69,6 +69,34 @@ export class BusinessController {
         };
     }
 
+    // Reveal / reset store admin login — generates a fresh password (no old one needed)
+    @Post(':id/store-credentials/reveal')
+    async revealStoreCredentials(@Param('id') id: string, @CurrentUser() user: any): Promise<any> {
+        const businesses = await this.businessService.getBusinessesForUser(user.id);
+        if (!businesses.find(b => b.id === id)) throw new BadRequestException('Unauthorized');
+
+        const commerceUrl = process.env.COMMERCE_URL || 'http://localhost:3003';
+        const internalKey = process.env.INTERNAL_API_KEY || '';
+        const newPassword = 'Biz-' + randomBytes(4).toString('hex');
+
+        const resp = await fetch(`${commerceUrl}/api/commerce/auth/admin/reset-password`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-tenant-id': id,
+                'x-internal-key': internalKey,
+            },
+            body: JSON.stringify({ email: user.email, password: newPassword, name: user.name }),
+        });
+        if (!resp.ok) {
+            throw new BadRequestException('Could not reset store credentials. Make sure the store is provisioned.');
+        }
+        const data = await resp.json().catch(() => ({}));
+        const email = (data?.email as string) || user.email;
+
+        return { success: true, data: { email, password: newPassword } };
+    }
+
     @Get(':id')
     async getBusinessById(@Param('id') id: string): Promise<any> {
         const business = await this.businessService.getBusinessById(id);

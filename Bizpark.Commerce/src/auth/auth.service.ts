@@ -53,6 +53,24 @@ export class AuthService {
     return this.register(tenantId, email, password, name, 'ADMIN');
   }
 
+  /**
+   * Reset (or create) the tenant admin password and return the email.
+   * Used by the platform API to re-reveal store credentials on demand —
+   * the plaintext password is never stored, so we set a fresh one.
+   */
+  async resetAdminPassword(tenantId: string, email: string, password: string, name: string) {
+    const repo = await this.repo(tenantId);
+    let admin = await repo.findOne({ where: { role: 'ADMIN' } });
+    if (!admin) {
+      // No admin yet — create one.
+      await this.register(tenantId, email, password, name, 'ADMIN');
+      return { email };
+    }
+    admin.passwordHash = await bcrypt.hash(password, 10);
+    await repo.save(admin);
+    return { email: admin.email };
+  }
+
   async updateProfile(tenantId: string, userId: string, payload: { name?: string; currentPassword?: string; newPassword?: string }) {
     const repo = await this.repo(tenantId);
     const user = await repo.findOne({ where: { id: userId } });
