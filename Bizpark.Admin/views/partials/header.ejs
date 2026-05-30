@@ -24,14 +24,22 @@
       <a class="<%= isActiveNav('/admin/subscriptions') ? 'is-active' : '' %>" <%= isActiveNav('/admin/subscriptions') ? 'aria-current="page"' : '' %> href="/admin/subscriptions">Subscriptions</a>
       <a class="<%= isActiveNav('/admin/users') ? 'is-active' : '' %>" <%= isActiveNav('/admin/users') ? 'aria-current="page"' : '' %> href="/admin/users">Users</a>
     </nav>
-    <form class="logout" method="post" action="/admin/logout">
-      <button type="submit">Log out</button>
-    </form>
+    <div class="sidebar-account">
+      <% if (admin) { %>
+        <div class="sidebar-profile-card">
+          <span class="admin-avatar"><%= (admin.name || 'A').trim().charAt(0).toUpperCase() %></span>
+          <span class="admin-profile-copy">
+            <strong><%= admin.name %></strong>
+            <small><%= admin.role %></small>
+          </span>
+        </div>
+      <% } %>
+      <form class="logout" method="post" action="/admin/logout">
+        <button type="submit">Log out</button>
+      </form>
+    </div>
   </aside>
   <main class="main">
     <div class="topbar">
       <h1><%= title || 'Admin' %></h1>
-      <% if (admin) { %>
-        <div class="admin-pill"><%= admin.name %> | <%= admin.role %></div>
-      <% } %>
     </div>
