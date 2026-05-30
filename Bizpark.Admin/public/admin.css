@@ -302,6 +302,614 @@ input[type="checkbox"] {
   margin-right: 8px;
 }
 
+.subscription-plan-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.subscription-plan-card {
+  display: grid;
+  gap: 18px;
+  min-width: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+  box-shadow: 0 14px 35px rgba(16, 23, 42, 0.06);
+}
+
+.subscription-plan-card--featured {
+  border-color: var(--purple);
+  box-shadow: 0 18px 42px rgba(91, 53, 213, 0.14);
+}
+
+.plan-preview {
+  display: grid;
+  gap: 12px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--line);
+}
+
+.plan-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.plan-heading h2 {
+  margin: 0 0 6px;
+  color: var(--ink);
+  font-size: 20px;
+  line-height: 1.2;
+}
+
+.plan-tier,
+.plan-popular {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0;
+  line-height: 1;
+  padding: 7px 9px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.plan-tier {
+  background: #f3f4f8;
+  color: var(--muted);
+}
+
+.plan-popular {
+  background: var(--purple);
+  color: #fff;
+}
+
+.plan-price {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  color: var(--ink);
+}
+
+.plan-price span {
+  font-size: 36px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.plan-price small {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.plan-description {
+  min-height: 42px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.plan-benefits {
+  display: grid;
+  gap: 9px;
+  margin: 2px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan-benefits li {
+  position: relative;
+  padding-left: 24px;
+  color: var(--ink);
+  font-size: 14px;
+  line-height: 1.35;
+}
+
+.plan-benefits li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 1px;
+  width: 15px;
+  height: 15px;
+  border: 2px solid var(--purple);
+  border-radius: 999px;
+}
+
+.plan-benefits li::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 5px;
+  width: 5px;
+  height: 3px;
+  border-left: 2px solid var(--purple);
+  border-bottom: 2px solid var(--purple);
+  transform: rotate(-45deg);
+}
+
+.plan-form {
+  display: grid;
+  gap: 13px;
+}
+
+.plan-form-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.plan-form-header h3 {
+  margin: 0;
+  color: var(--ink);
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.plan-form-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 104px;
+  gap: 10px;
+  align-items: end;
+}
+
+.plan-field {
+  display: grid;
+  min-width: 0;
+  gap: 6px;
+}
+
+.plan-field label,
+.plan-check {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.plan-field input,
+.plan-field textarea {
+  width: 100%;
+  margin-top: 0;
+  border-color: var(--line);
+  background: #fff;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.plan-field textarea {
+  min-height: 84px;
+}
+
+.plan-field--currency input {
+  text-transform: uppercase;
+}
+
+.plan-check {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  cursor: pointer;
+  text-transform: none;
+}
+
+.plan-check input {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--purple);
+}
+
+.plan-save {
+  width: 100%;
+  margin-top: 2px;
+  font-weight: 900;
+}
+
+.subscription-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+  margin-bottom: 16px;
+}
+
+.subscription-toolbar h2 {
+  margin: 10px 0 0;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.subscription-toolbar-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.subscription-toolbar-actions input,
+.subscription-toolbar-actions select {
+  width: 180px;
+  margin-top: 0;
+}
+
+.subscription-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+
+.subscription-tabs button {
+  min-height: 38px;
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.subscription-tabs button.is-active,
+.subscription-tabs button:hover {
+  background: var(--purple-soft);
+  border-color: var(--purple);
+  color: var(--purple);
+}
+
+.subscription-management-list {
+  display: grid;
+  gap: 12px;
+}
+
+.plan-management-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  padding: 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(16, 23, 42, 0.05);
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.plan-management-card:hover {
+  border-color: #d7d9e8;
+  box-shadow: 0 14px 34px rgba(16, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+.plan-management-card--active {
+  border-left: 4px solid var(--purple);
+}
+
+.plan-card-main {
+  display: grid;
+  min-width: 0;
+  gap: 9px;
+}
+
+.plan-card-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.plan-card-title h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1.25;
+}
+
+.plan-card-badges,
+.plan-card-meta,
+.plan-schedule-summary,
+.plan-card-actions,
+.plan-feature-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.plan-card-description {
+  max-width: 880px;
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.plan-card-meta {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.plan-card-meta strong {
+  color: var(--ink);
+  font-size: 24px;
+  line-height: 1;
+}
+
+.plan-card-meta strong span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.plan-original-price {
+  text-decoration: line-through;
+}
+
+.plan-discount {
+  color: var(--purple);
+}
+
+.plan-schedule-summary {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.plan-feature-pills {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.plan-feature-pills li {
+  border-radius: 999px;
+  background: #f3f4f8;
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 7px 9px;
+}
+
+.plan-type-badge,
+.plan-status-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+  padding: 7px 9px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.plan-type-badge {
+  background: var(--purple-soft);
+  color: var(--purple);
+}
+
+.plan-status-badge {
+  background: #f3f4f8;
+  color: var(--muted);
+}
+
+.plan-status-badge--active {
+  background: #e9f8ef;
+  color: #027a48;
+}
+
+.plan-status-badge--scheduled {
+  background: #fff4df;
+  color: #946200;
+}
+
+.plan-status-badge--expired,
+.plan-status-badge--inactive {
+  background: #f3f4f8;
+  color: var(--muted);
+}
+
+.plan-status-badge--draft {
+  background: var(--purple-soft);
+  color: var(--purple);
+}
+
+.plan-card-actions {
+  justify-content: flex-end;
+  min-width: 320px;
+}
+
+.plan-card-actions form {
+  margin: 0;
+}
+
+.plan-card-actions button {
+  min-height: 36px;
+  padding: 8px 10px;
+}
+
+.plan-dialog {
+  width: min(920px, calc(100vw - 32px));
+  max-height: min(820px, calc(100vh - 32px));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0;
+  box-shadow: 0 28px 80px rgba(16, 23, 42, 0.24);
+}
+
+.plan-dialog::backdrop {
+  background: rgba(7, 16, 36, 0.42);
+}
+
+.plan-dialog form {
+  display: grid;
+  gap: 18px;
+  padding: 22px;
+}
+
+.dialog-header,
+.dialog-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.dialog-header h2 {
+  margin: 8px 0 0;
+  font-size: 24px;
+}
+
+.dialog-actions {
+  justify-content: flex-end;
+  padding-top: 4px;
+}
+
+.plan-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.plan-form-grid label,
+.feature-editor-header label {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.form-field {
+  display: grid;
+  gap: 6px;
+}
+
+.plan-form-grid input,
+.plan-form-grid select,
+.plan-form-grid textarea {
+  width: 100%;
+  margin-top: 0;
+  border-color: var(--line);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.plan-form-grid textarea {
+  min-height: 92px;
+}
+
+.required-marker {
+  color: var(--danger);
+  font-weight: 900;
+}
+
+.field-helper,
+.field-error {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.35;
+  text-transform: none;
+}
+
+.field-helper {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.field-error {
+  display: none;
+  color: var(--danger);
+  font-weight: 900;
+}
+
+.form-field.has-error input,
+.form-field.has-error select,
+.form-field.has-error textarea {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 3px rgba(180, 35, 24, 0.1);
+}
+
+.form-field.has-error .field-error {
+  display: block;
+}
+
+.form-field.has-error label {
+  color: var(--danger);
+}
+
+.span-2 {
+  grid-column: span 2;
+}
+
+.span-1 {
+  grid-column: span 1;
+}
+
+.feature-editor {
+  display: grid;
+  gap: 10px;
+}
+
+.feature-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.feature-list {
+  display: grid;
+  gap: 8px;
+}
+
+.feature-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.feature-row input {
+  margin-top: 0;
+}
+
+.feature-row button {
+  min-height: 38px;
+  padding: 8px 10px;
+}
+
+.plan-form-grid .plan-check {
+  display: flex;
+  align-items: center;
+  align-self: end;
+  min-height: 42px;
+  gap: 8px;
+  padding: 10px 11px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: none;
+}
+
 button,
 .button {
   background: var(--purple);
@@ -406,6 +1014,25 @@ pre {
   .topbar {
     display: grid;
   }
+
+  .subscription-plan-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .subscription-toolbar,
+  .plan-management-card,
+  .plan-card-title {
+    display: grid;
+  }
+
+  .subscription-toolbar-actions {
+    justify-content: start;
+  }
+
+  .plan-card-actions {
+    justify-content: start;
+    min-width: 0;
+  }
 }
 
 @media (max-width: 760px) {
@@ -413,5 +1040,41 @@ pre {
   .topbar h1,
   .login-card h1 {
     font-size: 34px;
+  }
+
+  .subscription-plan-grid,
+  .plan-form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .plan-heading,
+  .plan-form-header {
+    display: grid;
+  }
+
+  .subscription-toolbar-actions,
+  .subscription-toolbar-actions input,
+  .subscription-toolbar-actions select,
+  .subscription-toolbar-actions button {
+    width: 100%;
+  }
+
+  .subscription-tabs {
+    padding-bottom: 2px;
+  }
+
+  .plan-form-grid,
+  .feature-row {
+    grid-template-columns: 1fr;
+  }
+
+  .span-2,
+  .span-1 {
+    grid-column: auto;
+  }
+
+  .dialog-header,
+  .dialog-actions {
+    display: grid;
   }
 }

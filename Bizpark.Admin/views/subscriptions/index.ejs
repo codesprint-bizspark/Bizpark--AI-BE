@@ -1,38 +1,276 @@
 <%- include('../partials/header') %>
-<div class="grid">
-  <% plans.forEach((plan) => { %>
-    <section class="card">
-      <h2><%= plan.name %> <span class="badge"><%= plan.tier %></span></h2>
-      <p class="metric">$<%= plan.priceMonthly %><span class="muted" style="font-size: 15px;"> /mo</span></p>
-      <% if (plan.isPopular) { %>
-        <p><span class="badge">MOST POPULAR</span></p>
-      <% } %>
-      <form class="stack" method="post" action="/admin/subscriptions/plans/<%= plan.tier %>">
-        <label>Name<br>
-          <input type="text" name="name" value="<%= plan.name %>">
-        </label>
-        <label>Monthly Price<br>
-          <input type="number" min="0" step="0.01" name="priceMonthly" value="<%= plan.priceMonthly %>">
-        </label>
-        <label>Currency<br>
-          <input type="text" name="currency" value="<%= plan.currency %>">
-        </label>
-        <label>Description<br>
-          <input type="text" name="description" value="<%= plan.description %>">
-        </label>
-        <label>CTA Text<br>
-          <input type="text" name="ctaText" value="<%= plan.ctaText %>">
-        </label>
-        <label>
-          <input type="checkbox" name="isPopular" <%= plan.isPopular ? 'checked' : '' %>>
-          Most popular
-        </label>
-        <label>Benefits<br>
-          <textarea name="benefits" rows="7"><%= plan.benefits.join('\n') %></textarea>
-        </label>
-        <button type="submit">Save Plan</button>
+
+<section class="subscription-toolbar">
+  <div>
+    <p class="eyebrow">Plan Catalog</p>
+    <h2><%= totalPlans %> subscription plans</h2>
+  </div>
+  <div class="subscription-toolbar-actions">
+    <input id="plan-search" type="search" placeholder="Search plans">
+    <select id="plan-status-filter">
+      <option value="ALL">All statuses</option>
+      <option value="ACTIVE">Active</option>
+      <option value="INACTIVE">Inactive</option>
+      <option value="SCHEDULED">Scheduled</option>
+      <option value="EXPIRED">Expired</option>
+      <option value="DRAFT">Draft</option>
+    </select>
+    <button type="button" onclick="openPlanDialog('add-plan-dialog')">Add New Plan</button>
+  </div>
+</section>
+
+<nav class="subscription-tabs" aria-label="Subscription plan groups">
+  <button type="button" class="is-active" data-plan-tab="all">All Plans</button>
+  <button type="button" data-plan-tab="regular">Regular Plans</button>
+  <button type="button" data-plan-tab="promotional">Promotional Plans</button>
+  <button type="button" data-plan-tab="expired">Expired Promotions</button>
+</nav>
+
+<div class="subscription-management-list" id="plan-list">
+  <% plans.forEach((plan) => {
+    const isPromotional = plan.type !== 'REGULAR';
+    const tabGroup = plan.effectiveStatus === 'EXPIRED' && isPromotional ? 'expired' : (isPromotional ? 'promotional' : 'regular');
+    const dateValue = (value) => value ? new Date(value).toISOString().slice(0, 16) : '';
+  %>
+    <article
+      class="plan-management-card <%= plan.effectiveStatus === 'ACTIVE' ? 'plan-management-card--active' : '' %>"
+      data-plan-card
+      data-tab="<%= tabGroup %>"
+      data-status="<%= plan.effectiveStatus %>"
+      data-search="<%= `${plan.name} ${plan.tier} ${plan.description} ${plan.badgeText}`.toLowerCase() %>"
+    >
+      <div class="plan-card-main">
+        <div class="plan-card-title">
+          <h2><%= plan.name %></h2>
+          <div class="plan-card-badges">
+            <span class="plan-type-badge"><%= plan.type.replace('_', ' ') %></span>
+            <span class="plan-status-badge plan-status-badge--<%= plan.effectiveStatus.toLowerCase().replace('_', '-') %>">
+              <%= plan.countdownLabel || plan.effectiveStatus %>
+            </span>
+          </div>
+        </div>
+
+        <p class="plan-card-description"><%= plan.description || 'No description added.' %></p>
+
+        <div class="plan-card-meta">
+          <strong>$<%= plan.priceMonthly %><span>/mo</span></strong>
+          <% if (plan.originalPriceMonthly) { %>
+            <span class="plan-original-price">$<%= plan.originalPriceMonthly %></span>
+          <% } %>
+          <% if (plan.discountPercentage) { %>
+            <span class="plan-discount"><%= plan.discountPercentage %>% OFF</span>
+          <% } %>
+          <span><%= plan.currency %></span>
+          <span><%= plan.tier %></span>
+          <% if (plan.badgeText) { %>
+            <span><%= plan.badgeText %></span>
+          <% } %>
+        </div>
+
+        <% if (plan.startsAt || plan.endsAt) { %>
+          <div class="plan-schedule-summary">
+            <% if (plan.startsAt) { %><span>Starts <%= new Date(plan.startsAt).toLocaleString() %></span><% } %>
+            <% if (plan.endsAt) { %><span>Ends <%= new Date(plan.endsAt).toLocaleString() %></span><% } %>
+            <span><%= plan.timezone %></span>
+          </div>
+        <% } %>
+
+        <ul class="plan-feature-pills">
+          <% plan.benefits.slice(0, 4).forEach((benefit) => { %>
+            <li><%= benefit %></li>
+          <% }) %>
+          <% if (plan.benefits.length > 4) { %>
+            <li>+<%= plan.benefits.length - 4 %> more</li>
+          <% } %>
+        </ul>
+      </div>
+
+      <div class="plan-card-actions">
+        <button type="button" class="secondary" onclick="openPlanDialog('edit-plan-<%= plan.id %>')">Edit</button>
+        <form method="post" action="/admin/subscriptions/plans/<%= plan.id %>/toggle">
+          <button type="submit" class="secondary"><%= plan.effectiveStatus === 'ACTIVE' ? 'Deactivate' : 'Activate' %></button>
+        </form>
+        <form method="post" action="/admin/subscriptions/plans/<%= plan.id %>/delete" onsubmit="return confirm('Delete this subscription plan?');">
+          <button type="submit" class="danger">Delete</button>
+        </form>
+      </div>
+    </article>
+
+    <dialog class="plan-dialog" id="edit-plan-<%= plan.id %>">
+      <form class="plan-crud-form" method="post" action="/admin/subscriptions/plans/<%= plan.id %>" novalidate>
+        <div class="dialog-header">
+          <div>
+            <p class="eyebrow">Edit Plan</p>
+            <h2><%= plan.name %></h2>
+          </div>
+          <button type="button" class="secondary" onclick="closePlanDialog('edit-plan-<%= plan.id %>')">Cancel</button>
+        </div>
+        <%- include('form-fields', { plan, planTypes, planStatuses, timezones, dateValue }) %>
+        <div class="dialog-actions">
+          <button type="button" class="secondary" onclick="closePlanDialog('edit-plan-<%= plan.id %>')">Cancel</button>
+          <button type="submit">Save Changes</button>
+        </div>
       </form>
-    </section>
+    </dialog>
   <% }) %>
 </div>
+
+<dialog class="plan-dialog" id="add-plan-dialog">
+  <form class="plan-crud-form" method="post" action="/admin/subscriptions/plans" novalidate>
+    <div class="dialog-header">
+      <div>
+        <p class="eyebrow">Create Plan</p>
+        <h2>Add New Plan</h2>
+      </div>
+      <button type="button" class="secondary" onclick="closePlanDialog('add-plan-dialog')">Cancel</button>
+    </div>
+    <%- include('form-fields', {
+      plan: {
+        name: '',
+        tier: '',
+        type: 'REGULAR',
+        status: 'DRAFT',
+        priceMonthly: 0,
+        originalPriceMonthly: '',
+        discountPercentage: '',
+        currency: 'USD',
+        description: '',
+        ctaText: 'Get Started',
+        badgeText: '',
+        isPopular: false,
+        benefits: [''],
+        startsAt: '',
+        endsAt: '',
+        timezone: 'UTC'
+      },
+      planTypes,
+      planStatuses,
+      timezones,
+      dateValue: () => ''
+    }) %>
+    <div class="dialog-actions">
+      <button type="button" class="secondary" onclick="closePlanDialog('add-plan-dialog')">Cancel</button>
+      <button type="submit">Create Plan</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  function openPlanDialog(id) {
+    document.getElementById(id)?.showModal();
+  }
+
+  function closePlanDialog(id) {
+    document.getElementById(id)?.close();
+  }
+
+  function addFeature(button) {
+    const list = button.closest('.feature-editor').querySelector('.feature-list');
+    const row = list.querySelector('.feature-row').cloneNode(true);
+    row.querySelector('input').value = '';
+    list.appendChild(row);
+  }
+
+  function removeFeature(button) {
+    const list = button.closest('.feature-list');
+    if (list.querySelectorAll('.feature-row').length === 1) {
+      button.closest('.feature-row').querySelector('input').value = '';
+      return;
+    }
+    button.closest('.feature-row').remove();
+  }
+
+  function moveFeature(button, direction) {
+    const row = button.closest('.feature-row');
+    if (direction < 0 && row.previousElementSibling) {
+      row.parentNode.insertBefore(row, row.previousElementSibling);
+    }
+    if (direction > 0 && row.nextElementSibling) {
+      row.parentNode.insertBefore(row.nextElementSibling, row);
+    }
+  }
+
+  function setFieldError(field, message) {
+    const wrapper = field.closest('.form-field');
+    if (!wrapper) return;
+    wrapper.classList.toggle('has-error', Boolean(message));
+    field.setAttribute('aria-invalid', message ? 'true' : 'false');
+    const error = wrapper.querySelector('.field-error');
+    if (error) {
+      error.textContent = message;
+    }
+  }
+
+  function validatePlanForm(form) {
+    let firstInvalid = null;
+    const requiredFields = Array.from(form.querySelectorAll('[data-required]'));
+
+    requiredFields.forEach((field) => {
+      const label = field.dataset.label || 'This field';
+      const value = (field.value || '').trim();
+      const isInvalid = !value;
+      setFieldError(field, isInvalid ? `${label} is required.` : '');
+      if (isInvalid && !firstInvalid) {
+        firstInvalid = field;
+      }
+    });
+
+    if (firstInvalid) {
+      firstInvalid.focus();
+      return false;
+    }
+
+    return true;
+  }
+
+  const cards = Array.from(document.querySelectorAll('[data-plan-card]'));
+  const search = document.getElementById('plan-search');
+  const statusFilter = document.getElementById('plan-status-filter');
+  const tabButtons = Array.from(document.querySelectorAll('[data-plan-tab]'));
+  let activeTab = 'all';
+
+  function filterPlans() {
+    const query = (search.value || '').toLowerCase();
+    const status = statusFilter.value;
+
+    cards.forEach((card) => {
+      const matchesTab = activeTab === 'all' || card.dataset.tab === activeTab;
+      const matchesSearch = !query || card.dataset.search.includes(query);
+      const matchesStatus = status === 'ALL' || card.dataset.status === status;
+      card.hidden = !(matchesTab && matchesSearch && matchesStatus);
+    });
+  }
+
+  tabButtons.forEach((button) => {
+    button.addEventListener('click', () => {
+      activeTab = button.dataset.planTab;
+      tabButtons.forEach((item) => item.classList.toggle('is-active', item === button));
+      filterPlans();
+    });
+  });
+  search.addEventListener('input', filterPlans);
+  statusFilter.addEventListener('change', filterPlans);
+
+  document.querySelectorAll('.plan-crud-form').forEach((form) => {
+    form.addEventListener('submit', (event) => {
+      if (!validatePlanForm(form)) {
+        event.preventDefault();
+      }
+    });
+
+    form.querySelectorAll('[data-required]').forEach((field) => {
+      field.addEventListener('input', () => {
+        if ((field.value || '').trim()) {
+          setFieldError(field, '');
+        }
+      });
+      field.addEventListener('change', () => {
+        if ((field.value || '').trim()) {
+          setFieldError(field, '');
+        }
+      });
+    });
+  });
+</script>
+
 <%- include('../partials/footer') %>
