@@ -4,6 +4,7 @@ import re
 from typing import TypedDict, Optional, List, Literal
 
 from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, END
 from pydantic import BaseModel, ValidationError
 
@@ -60,21 +61,46 @@ class MobileAppGenerationOutput(BaseModel):
 
 logger = logging.getLogger("runner.agents.mobile_app_builder")
 
-_llm: Optional[ChatOpenAI] = None
+_openai_llm: Optional[ChatOpenAI] = None
+_gemini_llm: Optional[ChatGoogleGenerativeAI] = None
+_minimax_llm: Optional[ChatOpenAI] = None
 
 
-def _get_llm() -> ChatOpenAI:
-    global _llm
-    if _llm is None:
-        if not settings.openai_api_key:
-            raise RuntimeError("OPENAI_API_KEY is not set — cannot run mobile app builder agent")
-        _llm = ChatOpenAI(
+def _get_openai():
+    global _openai_llm
+    if _openai_llm is None and settings.openai_api_key:
+        _openai_llm = ChatOpenAI(
             model="gpt-4o",
             api_key=settings.openai_api_key,
             temperature=0.4,
             model_kwargs={"response_format": {"type": "json_object"}},
         )
-    return _llm
+    return _openai_llm
+
+
+def _get_gemini():
+    global _gemini_llm
+    if _gemini_llm is None and settings.gemini_api_key:
+        _gemini_llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash",
+            google_api_key=settings.gemini_api_key,
+            temperature=0.4,
+            model_kwargs={"generation_config": {"response_mime_type": "application/json"}},
+        )
+    return _gemini_llm
+
+
+def _get_minimax():
+    global _minimax_llm
+    if _minimax_llm is None and settings.minimax_api_key:
+        _minimax_llm = ChatOpenAI(
+            model="MiniMax-Text-01",
+            api_key=settings.minimax_api_key,
+            base_url="https://api.minimaxi.chat/v1",
+            temperature=0.4,
+            model_kwargs={"response_format": {"type": "json_object"}},
+        )
+    return _minimax_llm
 
 
 class MobileAppState(TypedDict):
@@ -91,7 +117,7 @@ def validate_input(state: MobileAppState) -> MobileAppState:
     return {**state, "error": None}
 
 
-def generate_with_openai(state: MobileAppState) -> MobileAppState:
+async def generate_with_gemini(state: MobileAppState) -> MobileAppState:
     if state.get("error"):
         return state
 
@@ -185,27 +211,39 @@ Return ONLY a valid JSON object — no markdown, no explanation:
   }}
 }}"""
 
-    try:
-        response = _get_llm().invoke(prompt)
-        raw_text = response.content.strip()
+    def _parse(raw: str) -> dict:
+        raw = re.sub(r"^```(?:json)?\s*\n?", "", raw.strip(), flags=re.IGNORECASE)
+        raw = re.sub(r"\n?```\s*$", "", raw.strip()).strip()
+        return json.loads(raw)
 
-        # Strip markdown fences if model ignores json_object
-        raw_text = re.sub(r"^```(?:json)?\s*\n?", "", raw_text, flags=re.IGNORECASE)
-        raw_text = re.sub(r"\n?```\s*$", "", raw_text.strip()).strip()
+    # Fallback chain: OpenAI → Gemini → MiniMax
+    candidates = [
+        ("OpenAI",   _get_openai()),
+        ("Gemini",   _get_gemini()),
+        ("MiniMax",  _get_minimax()),
+    ]
+    candidates = [(name, llm) for name, llm in candidates if llm]
+    if not candidates:
+        return {**state, "error": "No LLM available — set OPENAI_API_KEY, GEMINI_API_KEY, or MINIMAX_API_KEY"}
 
-        generated = json.loads(raw_text)
+    last_error = ""
+    for provider, llm in candidates:
         try:
-            MobileAppGenerationOutput.model_validate(generated)
-        except ValidationError as ve:
-            logger.error(f"Mobile app builder output failed schema validation: {ve}")
-            return {**state, "error": f"AI output did not match expected schema: {ve}"}
+            response = await llm.ainvoke(prompt)
+            generated = _parse(response.content)
+            try:
+                MobileAppGenerationOutput.model_validate(generated)
+            except ValidationError as ve:
+                logger.error(f"Mobile app builder schema validation failed ({provider}): {ve}")
+                return {**state, "error": f"AI output did not match expected schema: {ve}"}
+            logger.info(f"{provider} generated mobile app config for {business_name}")
+            return {**state, "generated_content": generated}
+        except Exception as e:
+            last_error = str(e)
+            logger.warning(f"{provider} failed: {e} — trying next provider")
 
-        logger.info(f"OpenAI generated mobile app config for {business_name}")
-        return {**state, "generated_content": generated}
-
-    except Exception as e:
-        logger.error(f"OpenAI mobile app generation failed: {e}")
-        return {**state, "error": str(e)}
+    logger.error(f"All providers failed. Last error: {last_error}")
+    return {**state, "error": last_error}
 
 
 def should_end_on_error(state: MobileAppState) -> str:
@@ -214,7 +252,7 @@ def should_end_on_error(state: MobileAppState) -> str:
 
 _builder = StateGraph(MobileAppState)
 _builder.add_node("validate", validate_input)
-_builder.add_node("generate", generate_with_openai)
+_builder.add_node("generate", generate_with_gemini)
 _builder.set_entry_point("validate")
 _builder.add_conditional_edges("validate", should_end_on_error, {"generate": "generate", "end": END})
 _builder.add_edge("generate", END)

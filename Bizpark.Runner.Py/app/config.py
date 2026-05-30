@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     internal_api_key: str = ""
     openai_api_key: str = ""
     gemini_api_key: str = ""
+    minimax_api_key: str = ""
 
     # Social publishing
     token_encryption_key: str = ""
