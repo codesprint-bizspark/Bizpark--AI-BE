@@ -7,6 +7,7 @@ import { SocialModule } from './social/social.module';
 import { GoogleBusinessModule } from './google-business/google-business.module';
 import { SubscriptionPlansModule } from './subscription-plans/subscription-plans.module';
 import { McpModule } from './mcp/mcp.module';
+import { BillingModule } from './billing/billing.module';
 
 /**
  * Redis connection config.
@@ -44,6 +45,7 @@ function buildRedisConnection() {
     GoogleBusinessModule,
     SubscriptionPlansModule,
     McpModule,
+    BillingModule,
   ],
 })
 export class AppModule { }
