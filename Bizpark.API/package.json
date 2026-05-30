@@ -30,6 +30,7 @@
     "@nestjs/jwt": "^11.0.0",
     "@nestjs/passport": "^11.0.5",
     "@nestjs/platform-express": "^11.0.1",
+    "@types/pg": "^8.20.0",
     "bcrypt": "^5.1.1",
     "bizpark.core": "file:../Bizpark.Core",
     "bullmq": "^5.70.4",
@@ -37,6 +38,7 @@
     "openai": "^4.104.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
+    "pg": "^8.21.0",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1"
   },

@@ -13,8 +13,8 @@ type Config struct {
 }
 
 func Load() *Config {
-	_ = godotenv.Load("../.env")
-	_ = godotenv.Load(".env")
+	_ = godotenv.Load("../Bizpark.Commerce/.env")
+	_ = godotenv.Load(".env") // local override if exists
 
 	commerceURL := os.Getenv("COMMERCE_DATABASE_URL")
 	if commerceURL == "" {
