@@ -10,6 +10,7 @@ import (
 type Config struct {
 	CommerceDatabaseURL string // Neon Commerce DB — tenant schemas + McpApiKey
 	Port                string
+	PublicURL           string // Public base URL advertised to MCP clients (SSE endpoint event)
 }
 
 func Load() *Config {
@@ -26,8 +27,17 @@ func Load() *Config {
 		port = "3004"
 	}
 
+	// The SSE transport tells the client where to POST messages via the
+	// `endpoint` event. For remote clients this MUST be the public URL the
+	// client reached us on — not localhost. Defaults to localhost for dev.
+	publicURL := os.Getenv("MCP_PUBLIC_URL")
+	if publicURL == "" {
+		publicURL = "http://localhost:" + port
+	}
+
 	return &Config{
 		CommerceDatabaseURL: commerceURL,
 		Port:                port,
+		PublicURL:           publicURL,
 	}
 }

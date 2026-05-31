@@ -55,7 +55,7 @@ func main() {
 
 	addr := ":" + cfg.Port
 	sseServer := server.NewSSEServer(mcpServer,
-		server.WithBaseURL("http://localhost"+addr),
+		server.WithBaseURL(cfg.PublicURL),
 		server.WithSSEContextFunc(authMiddleware),
 	)
 
