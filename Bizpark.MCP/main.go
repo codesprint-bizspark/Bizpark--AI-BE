@@ -48,7 +48,7 @@ func main() {
 		server.WithBaseURL(cfg.PublicURL),
 		server.WithSSEContextFunc(authMiddleware),
 	)
-	streamable := streamableHTTPHandler(mcpServer, database)
+	streamable := streamableHTTPHandler(mcpServer, database, cfg.PublicURL)
 
 	// Mount the transports + OAuth endpoints.
 	//   GET  /sse      → SSE transport      (mcp-remote / Claude Desktop)
