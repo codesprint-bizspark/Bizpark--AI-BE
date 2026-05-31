@@ -210,6 +210,7 @@ func (p *oauthProvider) handleAuthorize(w http.ResponseWriter, r *http.Request) 
 	switch r.Method {
 	case http.MethodGet:
 		q := r.URL.Query()
+		log.Printf("[oauth] authorize GET query=%s", r.URL.RawQuery)
 		redirectURI := q.Get("redirect_uri")
 		codeChallenge := q.Get("code_challenge")
 		method := q.Get("code_challenge_method")
@@ -288,6 +289,7 @@ func (p *oauthProvider) handleToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = r.ParseForm()
+	log.Printf("[oauth] token form=%v", r.Form)
 	grant := r.PostFormValue("grant_type")
 	code := r.PostFormValue("code")
 	verifier := r.PostFormValue("code_verifier")
