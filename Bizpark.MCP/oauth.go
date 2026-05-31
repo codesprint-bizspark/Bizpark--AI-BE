@@ -51,6 +51,8 @@ func newOAuthProvider(database *db.DB, publicURL string) *oauthProvider {
 func (p *oauthProvider) register(mux *http.ServeMux) {
 	mux.HandleFunc("/.well-known/oauth-authorization-server", p.handleASMetadata)
 	mux.HandleFunc("/.well-known/oauth-protected-resource", p.handleResourceMetadata)
+	// Path-scoped variant (RFC 9728): clients probe /.well-known/oauth-protected-resource/<path>.
+	mux.HandleFunc("/.well-known/oauth-protected-resource/", p.handleResourceMetadata)
 	mux.HandleFunc("/oauth/register", p.handleRegister)
 	mux.HandleFunc("/oauth/authorize", p.handleAuthorize)
 	mux.HandleFunc("/oauth/token", p.handleToken)
