@@ -44,6 +44,11 @@ func main() {
 		authHeader := r.Header.Get("Authorization")
 		rawKey := strings.TrimPrefix(authHeader, "Bearer ")
 		if rawKey == "" || rawKey == authHeader {
+			// Fallback for clients that can't set an Authorization header
+			// (e.g. claude.ai web custom connectors): accept ?key= query param.
+			rawKey = r.URL.Query().Get("key")
+		}
+		if rawKey == "" {
 			return context.WithValue(ctx, tools.BusinessIDKey, "")
 		}
 		businessID, err := database.ResolveAPIKey(ctx, rawKey)
