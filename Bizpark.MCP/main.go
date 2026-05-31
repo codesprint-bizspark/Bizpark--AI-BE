@@ -64,10 +64,17 @@ func main() {
 		server.WithSSEContextFunc(authMiddleware),
 	)
 
-	log.Printf("BizSpark MCP server running on %s", addr)
+	// Mount OAuth endpoints (for claude.ai web connectors) alongside the SSE
+	// transport. The SSEServer is an http.Handler that routes /sse and /message;
+	// everything else falls through to the OAuth provider's explicit routes.
+	mux := http.NewServeMux()
+	newOAuthProvider(database, cfg.PublicURL).register(mux)
+	mux.Handle("/", sseServer)
+
+	log.Printf("BizSpark MCP server running on %s (public: %s)", addr, cfg.PublicURL)
 	log.Printf("Commerce DB: tenant schema per business")
 
-	if err := sseServer.Start(addr); err != nil {
+	if err := http.ListenAndServe(addr, mux); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
 }
