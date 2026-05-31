@@ -58,11 +58,15 @@ func main() {
 	mux := http.NewServeMux()
 	newOAuthProvider(database, cfg.PublicURL).register(mux)
 	mux.HandleFunc("/sse", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost || r.Method == http.MethodDelete {
-			streamable(w, r)
+		// GET = SSE stream (mcp-remote / Desktop). Everything else — POST
+		// (Streamable HTTP), DELETE (session end), and OPTIONS (the browser's
+		// CORS preflight for the authenticated POST) — goes to the Streamable
+		// handler, which answers preflight with the right CORS headers.
+		if r.Method == http.MethodGet {
+			sseServer.ServeHTTP(w, r)
 			return
 		}
-		sseServer.ServeHTTP(w, r) // GET → SSE stream
+		streamable(w, r)
 	})
 	mux.Handle("/message", sseServer)
 	mux.Handle("/", sseServer)
