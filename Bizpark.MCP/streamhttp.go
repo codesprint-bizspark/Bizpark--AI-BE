@@ -41,7 +41,7 @@ func authContext(ctx context.Context, r *http.Request, database *db.DB) context.
 // message via POST and returns the JSON-RPC response as application/json.
 // Our tools are stateless request/response, so no session is required.
 func streamableHTTPHandler(mcpServer *server.MCPServer, database *db.DB, publicURL string) http.HandlerFunc {
-	resourceMeta := strings.TrimSuffix(publicURL, "/") + "/.well-known/oauth-protected-resource"
+	resourceMeta := strings.TrimSuffix(publicURL, "/") + "/.well-known/oauth-protected-resource/sse"
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodOptions:
