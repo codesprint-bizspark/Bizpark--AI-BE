@@ -125,8 +125,11 @@ func (p *oauthProvider) handleASMetadata(w http.ResponseWriter, r *http.Request)
 }
 
 func (p *oauthProvider) handleResourceMetadata(w http.ResponseWriter, r *http.Request) {
+	// The canonical protected-resource URI is the MCP endpoint itself (/sse),
+	// not the host root — otherwise the client binds/retries the token against
+	// the wrong resource.
 	writeJSON(w, http.StatusOK, map[string]any{
-		"resource":              p.publicURL,
+		"resource":              p.publicURL + "/sse",
 		"authorization_servers": []string{p.publicURL},
 	})
 }
