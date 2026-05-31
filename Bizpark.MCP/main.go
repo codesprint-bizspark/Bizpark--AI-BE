@@ -53,8 +53,10 @@ func main() {
 		}
 		businessID, err := database.ResolveAPIKey(ctx, rawKey)
 		if err != nil {
+			log.Printf("[sse] auth FAIL on %s: key present but unresolved", r.URL.Path)
 			return context.WithValue(ctx, tools.BusinessIDKey, "")
 		}
+		log.Printf("[sse] auth OK on %s: business=%s", r.URL.Path, businessID)
 		return context.WithValue(ctx, tools.BusinessIDKey, businessID)
 	}
 
