@@ -56,22 +56,13 @@ func main() {
 	//   POST /message  → SSE message channel (mcp-remote)
 	//   /oauth/*, /.well-known/* → OAuth (claude.ai web)
 	mux := http.NewServeMux()
-	// NOTE: OAuth advertising is intentionally disabled. claude.ai web would
-	// discover it and force an OAuth flow that can't be completed; instead the
-	// web connector authenticates with ?key= in the URL (Streamable HTTP) and
-	// Desktop/mcp-remote uses a Bearer header. (OAuth code kept for reference.)
-	_ = newOAuthProvider
-	mux.HandleFunc("/sse", func(w http.ResponseWriter, r *http.Request) {
-		// GET = SSE stream (mcp-remote / Desktop). Everything else — POST
-		// (Streamable HTTP), DELETE (session end), and OPTIONS (the browser's
-		// CORS preflight for the authenticated POST) — goes to the Streamable
-		// handler, which answers preflight with the right CORS headers.
-		if r.Method == http.MethodGet {
-			sseServer.ServeHTTP(w, r)
-			return
-		}
-		streamable(w, r)
-	})
+	// OAuth (claude.ai web custom connectors require it).
+	newOAuthProvider(database, cfg.PublicURL).register(mux)
+	// /mcp = Streamable HTTP transport for claude.ai web (POST JSON-RPC; GET →
+	// 405 so the client uses pure POST, avoiding the SSE "endpoint" event).
+	mux.HandleFunc("/mcp", streamable)
+	// /sse + /message = legacy HTTP+SSE transport for mcp-remote / Claude Desktop.
+	mux.Handle("/sse", sseServer)
 	mux.Handle("/message", sseServer)
 	mux.Handle("/", sseServer)
 

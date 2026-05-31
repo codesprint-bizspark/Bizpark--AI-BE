@@ -129,7 +129,7 @@ func (p *oauthProvider) handleResourceMetadata(w http.ResponseWriter, r *http.Re
 	// not the host root — otherwise the client binds/retries the token against
 	// the wrong resource.
 	writeJSON(w, http.StatusOK, map[string]any{
-		"resource":              p.publicURL + "/sse",
+		"resource":              p.publicURL + "/mcp",
 		"authorization_servers": []string{p.publicURL},
 	})
 }
@@ -330,6 +330,8 @@ func (p *oauthProvider) handleToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("[oauth] token OK — issuing access token")
+	w.Header().Set("Cache-Control", "no-store")
+	w.Header().Set("Pragma", "no-cache")
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"access_token": ac.apiKey, // the biz_mcp key — resolved by the SSE auth middleware
