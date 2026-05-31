@@ -41,7 +41,6 @@ func authContext(ctx context.Context, r *http.Request, database *db.DB) context.
 // message via POST and returns the JSON-RPC response as application/json.
 // Our tools are stateless request/response, so no session is required.
 func streamableHTTPHandler(mcpServer *server.MCPServer, database *db.DB, publicURL string) http.HandlerFunc {
-	resourceMeta := strings.TrimSuffix(publicURL, "/") + "/.well-known/oauth-protected-resource/sse"
 	return func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case http.MethodOptions:
@@ -56,22 +55,12 @@ func streamableHTTPHandler(mcpServer *server.MCPServer, database *db.DB, publicU
 				http.Error(w, "read error", http.StatusBadRequest)
 				return
 			}
+			// Auth comes from ?key= in the connector URL (claude.ai web) or a
+			// Bearer header (mcp-remote). We do NOT 401/advertise OAuth — that
+			// makes the client attempt an OAuth flow we can't complete. Instead
+			// the tool layer enforces auth (getBusinessID errors without a key).
 			ctx := authContext(r.Context(), r, database)
 			w.Header().Set("Access-Control-Allow-Origin", "*")
-
-			// Per the MCP authorization spec, an unauthenticated request must be
-			// rejected with 401 + WWW-Authenticate so the client knows to run the
-			// OAuth flow and retry WITH a bearer token.
-			if bizID, _ := ctx.Value(tools.BusinessIDKey).(string); bizID == "" {
-				w.Header().Set("WWW-Authenticate",
-					`Bearer resource_metadata="`+resourceMeta+`"`)
-				writeJSON(w, http.StatusUnauthorized, map[string]any{
-					"error":             "unauthorized",
-					"error_description": "a valid bearer token is required",
-				})
-				return
-			}
-
 			resp := mcpServer.HandleMessage(ctx, body)
 			if resp == nil {
 				// Notification / response — nothing to return.
