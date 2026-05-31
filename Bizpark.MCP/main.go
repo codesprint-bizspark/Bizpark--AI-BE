@@ -4,7 +4,6 @@ import (
 	"context"
 	"log"
 	"net/http"
-	"strings"
 
 	"github.com/bizspark/mcp/config"
 	"github.com/bizspark/mcp/db"
@@ -41,24 +40,7 @@ func main() {
 	tools.Register(mcpServer, database)
 
 	authMiddleware := func(ctx context.Context, r *http.Request) context.Context {
-		authHeader := r.Header.Get("Authorization")
-		rawKey := strings.TrimPrefix(authHeader, "Bearer ")
-		if rawKey == "" || rawKey == authHeader {
-			// Fallback for clients that can't set an Authorization header
-			// (e.g. claude.ai web custom connectors): accept ?key= query param.
-			rawKey = r.URL.Query().Get("key")
-		}
-		if rawKey == "" {
-			log.Printf("[sse] connect on %s WITHOUT a key/token", r.URL.Path)
-			return context.WithValue(ctx, tools.BusinessIDKey, "")
-		}
-		businessID, err := database.ResolveAPIKey(ctx, rawKey)
-		if err != nil {
-			log.Printf("[sse] auth FAIL on %s: key present but unresolved", r.URL.Path)
-			return context.WithValue(ctx, tools.BusinessIDKey, "")
-		}
-		log.Printf("[sse] auth OK on %s: business=%s", r.URL.Path, businessID)
-		return context.WithValue(ctx, tools.BusinessIDKey, businessID)
+		return authContext(ctx, r, database)
 	}
 
 	addr := ":" + cfg.Port
@@ -66,12 +48,23 @@ func main() {
 		server.WithBaseURL(cfg.PublicURL),
 		server.WithSSEContextFunc(authMiddleware),
 	)
+	streamable := streamableHTTPHandler(mcpServer, database)
 
-	// Mount OAuth endpoints (for claude.ai web connectors) alongside the SSE
-	// transport. The SSEServer is an http.Handler that routes /sse and /message;
-	// everything else falls through to the OAuth provider's explicit routes.
+	// Mount the transports + OAuth endpoints.
+	//   GET  /sse      → SSE transport      (mcp-remote / Claude Desktop)
+	//   POST /sse      → Streamable HTTP    (claude.ai web custom connectors)
+	//   POST /message  → SSE message channel (mcp-remote)
+	//   /oauth/*, /.well-known/* → OAuth (claude.ai web)
 	mux := http.NewServeMux()
 	newOAuthProvider(database, cfg.PublicURL).register(mux)
+	mux.HandleFunc("/sse", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodPost || r.Method == http.MethodDelete {
+			streamable(w, r)
+			return
+		}
+		sseServer.ServeHTTP(w, r) // GET → SSE stream
+	})
+	mux.Handle("/message", sseServer)
 	mux.Handle("/", sseServer)
 
 	// Log every request so we can see exactly what a client does post-OAuth.
