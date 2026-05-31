@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"html/template"
+	"log"
 	"net/http"
 	"net/url"
 	"strings"
@@ -142,6 +143,7 @@ func (p *oauthProvider) handleRegister(w http.ResponseWriter, r *http.Request) {
 	}
 	var req map[string]any
 	_ = json.NewDecoder(r.Body).Decode(&req)
+	log.Printf("[oauth] register redirect_uris=%v client_name=%v", req["redirect_uris"], req["client_name"])
 
 	resp := map[string]any{
 		"client_id":                  "mcp-" + randToken(16),
@@ -253,6 +255,7 @@ func (p *oauthProvider) handleAuthorize(w http.ResponseWriter, r *http.Request) 
 			expiresAt:     time.Now().Add(5 * time.Minute),
 		}
 		p.mu.Unlock()
+		log.Printf("[oauth] authorize OK redirect_uri=%q challenge_len=%d", redirectURI, len(codeChallenge))
 
 		sep := "?"
 		if strings.Contains(redirectURI, "?") {
@@ -280,13 +283,17 @@ func (p *oauthProvider) handleToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = r.ParseForm()
-	if r.PostFormValue("grant_type") != "authorization_code" {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "unsupported_grant_type"})
-		return
-	}
+	grant := r.PostFormValue("grant_type")
 	code := r.PostFormValue("code")
 	verifier := r.PostFormValue("code_verifier")
 	redirectURI := r.PostFormValue("redirect_uri")
+	log.Printf("[oauth] token grant=%q code_len=%d verifier_len=%d redirect_uri=%q ct=%q",
+		grant, len(code), len(verifier), redirectURI, r.Header.Get("Content-Type"))
+
+	if grant != "authorization_code" {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "unsupported_grant_type"})
+		return
+	}
 
 	p.mu.Lock()
 	ac, ok := p.codes[code]
@@ -296,19 +303,26 @@ func (p *oauthProvider) handleToken(w http.ResponseWriter, r *http.Request) {
 	p.mu.Unlock()
 
 	if !ok || time.Now().After(ac.expiresAt) {
+		log.Printf("[oauth] token FAIL: code unknown/expired (found=%v)", ok)
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid_grant", "error_description": "code expired or unknown"})
 		return
 	}
-	if ac.redirectURI != redirectURI {
+	// redirect_uri: enforce match only when the client sent one (PKCE is the
+	// primary protection; some clients omit it on the token request).
+	if redirectURI != "" && ac.redirectURI != redirectURI {
+		log.Printf("[oauth] token FAIL: redirect_uri mismatch stored=%q got=%q", ac.redirectURI, redirectURI)
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid_grant", "error_description": "redirect_uri mismatch"})
 		return
 	}
 	// PKCE S256 verification
 	sum := sha256.Sum256([]byte(verifier))
-	if base64.RawURLEncoding.EncodeToString(sum[:]) != ac.codeChallenge {
+	computed := base64.RawURLEncoding.EncodeToString(sum[:])
+	if computed != ac.codeChallenge {
+		log.Printf("[oauth] token FAIL: PKCE mismatch computed=%q stored=%q", computed, ac.codeChallenge)
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid_grant", "error_description": "PKCE verification failed"})
 		return
 	}
+	log.Printf("[oauth] token OK — issuing access token")
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"access_token": ac.apiKey, // the biz_mcp key — resolved by the SSE auth middleware
