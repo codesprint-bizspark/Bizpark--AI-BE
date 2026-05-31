@@ -49,6 +49,7 @@ func main() {
 			rawKey = r.URL.Query().Get("key")
 		}
 		if rawKey == "" {
+			log.Printf("[sse] connect on %s WITHOUT a key/token", r.URL.Path)
 			return context.WithValue(ctx, tools.BusinessIDKey, "")
 		}
 		businessID, err := database.ResolveAPIKey(ctx, rawKey)
@@ -73,10 +74,16 @@ func main() {
 	newOAuthProvider(database, cfg.PublicURL).register(mux)
 	mux.Handle("/", sseServer)
 
+	// Log every request so we can see exactly what a client does post-OAuth.
+	logged := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("[req] %s %s auth=%t", r.Method, r.URL.Path, r.Header.Get("Authorization") != "")
+		mux.ServeHTTP(w, r)
+	})
+
 	log.Printf("BizSpark MCP server running on %s (public: %s)", addr, cfg.PublicURL)
 	log.Printf("Commerce DB: tenant schema per business")
 
-	if err := http.ListenAndServe(addr, mux); err != nil {
+	if err := http.ListenAndServe(addr, logged); err != nil {
 		log.Fatalf("Server failed: %v", err)
 	}
 }
