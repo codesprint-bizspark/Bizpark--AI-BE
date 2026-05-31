@@ -9,7 +9,7 @@ RUN go mod download
 
 # Build
 COPY Bizpark.MCP/ ./
-RUN CGO_ENABLED=0 GOOS=linux go build -o /out/bizspark-mcp ./main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/bizspark-mcp .
 
 # ── Runtime stage ───────────────────────────────────────────────────────────────
 FROM alpine:3.20 AS runtime
