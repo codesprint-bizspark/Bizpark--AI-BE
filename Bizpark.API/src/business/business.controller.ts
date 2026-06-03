@@ -1,9 +1,13 @@
-import { Controller, Get, Post, Body, Param, UseGuards, BadRequestException } from '@nestjs/common';
+import {
+    Controller, Get, Post, Patch, Body, Param, UseGuards, BadRequestException, UploadedFile, UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { BusinessService } from './business.service';
 import { applicationDb, CreateBusinessDto, SaveWebsiteConfigDto, WebsiteStatus, MobileAppStatus, MobileAppStoreStatus } from 'bizpark.core';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { AgentService } from '../agent/agent.service';
+import { MediaStorageService } from '../media/media-storage.service';
 import { randomBytes } from 'node:crypto';
 
 @Controller('api/business')
@@ -11,7 +15,8 @@ import { randomBytes } from 'node:crypto';
 export class BusinessController {
     constructor(
         private readonly businessService: BusinessService,
-        private readonly agentService: AgentService
+        private readonly agentService: AgentService,
+        private readonly mediaStorage: MediaStorageService,
     ) { }
 
     @Post()
@@ -123,6 +128,39 @@ export class BusinessController {
             message: 'Website configuration saved',
             data: website
         };
+    }
+
+    @Get(':id/website/config')
+    async getWebsiteConfig(
+        @Param('id') id: string,
+        @CurrentUser() user: { id: string },
+    ): Promise<any> {
+        await this.businessService.assertUserOwnsBusiness(user.id, id);
+        const data = await this.businessService.getWebsiteConfigForBusiness(id);
+        return { success: true, data };
+    }
+
+    @Patch(':id/website/config')
+    async patchWebsiteConfig(
+        @Param('id') id: string,
+        @Body() body: Record<string, unknown>,
+        @CurrentUser() user: { id: string },
+    ): Promise<any> {
+        await this.businessService.assertUserOwnsBusiness(user.id, id);
+        const data = await this.businessService.patchWebsiteConfigForBusiness(id, body);
+        return { success: true, message: 'Website configuration updated', data };
+    }
+
+    @Post(':id/website/media')
+    @UseInterceptors(FileInterceptor('file'))
+    async uploadWebsiteMedia(
+        @Param('id') id: string,
+        @UploadedFile() file: Express.Multer.File,
+        @CurrentUser() user: { id: string },
+    ): Promise<any> {
+        await this.businessService.assertUserOwnsBusiness(user.id, id);
+        const url = await this.mediaStorage.uploadWebsiteMedia(id, file);
+        return { success: true, data: { url } };
     }
 
     @Post(':id/website/deploy')
