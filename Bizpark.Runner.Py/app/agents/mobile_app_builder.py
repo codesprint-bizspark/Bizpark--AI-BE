@@ -98,7 +98,6 @@ def _get_minimax():
             api_key=settings.minimax_api_key,
             base_url="https://api.minimaxi.chat/v1",
             temperature=0.4,
-            model_kwargs={"response_format": {"type": "json_object"}},
         )
     return _minimax_llm
 

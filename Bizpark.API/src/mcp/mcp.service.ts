@@ -1,15 +1,12 @@
 import { ForbiddenException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { Client } from 'pg';
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
-import { createHash, randomBytes } from 'crypto';
 import { applicationDb } from 'bizpark.core';
 
 type CurrentUser = { id: string; email: string; name: string };
 
 const KEY_PREFIX = 'biz_mcp_';
 const DISPLAY_PREFIX_LEN = 16;
-const DISPLAY_PREFIX_LEN = 16; // "biz_mcp_" + 8 chars shown to user
 
 function hashKey(raw: string): string {
     return createHash('sha256').update(raw).digest('hex');
@@ -36,7 +33,6 @@ async function withCommerceDb<T>(fn: (client: Client) => Promise<T>): Promise<T>
 @Injectable()
 export class McpService implements OnModuleInit {
     async onModuleInit() {
-        // Ensure McpApiKey table exists in Commerce DB on startup
         await withCommerceDb(async (client) => {
             await client.query(`
                 CREATE TABLE IF NOT EXISTS public."McpApiKey" (
@@ -55,11 +51,7 @@ export class McpService implements OnModuleInit {
             `);
         });
     }
-    return KEY_PREFIX + randomBytes(24).toString('hex'); // biz_mcp_ + 48 hex chars
-}
 
-@Injectable()
-export class McpService {
     private async assertAccess(businessId: string, userId: string) {
         const rows = await applicationDb.business.findMany({
             where: { users: { some: { userId } } },
@@ -84,20 +76,6 @@ export class McpService {
         });
 
         return { success: true, data: keys };
-        const keys = await applicationDb.mcpApiKey.findMany({
-            where: { businessId, revokedAt: null },
-            orderBy: { createdAt: 'desc' },
-        });
-        return {
-            success: true,
-            data: keys.map((k) => ({
-                id: k.id,
-                keyPrefix: k.keyPrefix,
-                label: k.label,
-                lastUsedAt: k.lastUsedAt,
-                createdAt: k.createdAt,
-            })),
-        };
     }
 
     async generateKey(businessId: string, label: string | undefined, user: CurrentUser) {
@@ -114,16 +92,7 @@ export class McpService {
                 [businessId, hash, keyPrefix, label ?? null],
             );
         });
-        await applicationDb.mcpApiKey.create({
-            data: {
-                businessId,
-                keyHash: hash,
-                keyPrefix,
-                label: label ?? null,
-            },
-        });
 
-        // Raw key returned ONCE — not stored
         return { success: true, data: { key: raw, keyPrefix, label: label ?? null } };
     }
 
@@ -145,14 +114,6 @@ export class McpService {
         });
 
         if (!revoked) throw new NotFoundException('API key not found');
-        const key = await applicationDb.mcpApiKey.findUnique({ where: { id: keyId } });
-        if (!key || key.businessId !== businessId) throw new NotFoundException('API key not found');
-        if (key.revokedAt) throw new ForbiddenException('Key already revoked');
-
-        await applicationDb.mcpApiKey.update({
-            where: { id: keyId },
-            data: { revokedAt: new Date() },
-        });
         return { success: true };
     }
 }
