@@ -13,11 +13,11 @@
 <section class="command-hero command-hero--compact">
   <div>
     <span class="eyebrow">Executive Overview</span>
-    <h2>Platform health and priority activity.</h2>
+    <h2>Platform health and priority activity</h2>
   </div>
   <div class="hero-actions">
     <% dashboard.quickActions.forEach((action) => { %>
-      <a class="button" href="<%= action.href %>"><%= action.label %></a>
+      <a class="button button--ghost" href="<%= action.href %>"><%= action.label %></a>
     <% }) %>
   </div>
   <div class="command-attention">
@@ -26,7 +26,7 @@
   </div>
 </section>
 
-<section class="command-kpi-grid command-kpi-grid--compact">
+<section class="command-kpi-grid command-kpi-grid--compact" aria-label="Key metrics">
   <% dashboard.kpis.forEach((kpi) => { %>
     <a class="command-kpi-card" href="<%= kpi.label.includes('Business') ? '/admin/businesses' : kpi.label.includes('Website') ? '/admin/websites' : kpi.label.includes('Subscription') ? '/admin/subscriptions' : '/admin/agent-tasks' %>">
       <span class="command-icon command-icon--<%= kpi.icon %>"></span>
@@ -66,16 +66,20 @@
         <p class="eyebrow">Recent Activity</p>
         <h2>Latest platform events</h2>
       </div>
+      <% if (dashboard.activity.length) { %>
+        <span class="panel-count"><%= dashboard.activity.length %></span>
+      <% } %>
     </div>
     <% if (dashboard.activity.length) { %>
       <div class="activity-timeline">
         <% dashboard.activity.slice(0, 7).forEach((item) => { %>
           <a class="activity-item" href="<%= item.href %>">
             <span class="command-icon command-icon--<%= item.icon %>"></span>
-            <span>
+            <span class="activity-body">
               <strong><%= item.label %></strong>
-              <small><%= item.timestamp.toISOString().slice(0, 16).replace('T', ' ') %> | <%= item.status %></small>
+              <small><%= item.timestamp.toISOString().slice(0, 16).replace('T', ' ') %></small>
             </span>
+            <span class="activity-status activity-status--<%= String(item.status || '').toLowerCase().replace(/[^a-z]+/g, '-') %>"><%= item.status %></span>
           </a>
         <% }) %>
       </div>

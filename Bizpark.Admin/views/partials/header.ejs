@@ -4,26 +4,48 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title><%= title || 'Bizpark Admin' %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/admin.css">
 </head>
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <div class="brand">BizSpark AI Admin</div>
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-text">
+        BizSpark AI
+        <small>Admin</small>
+      </span>
+    </div>
     <%
       const activePath = typeof currentPath !== 'undefined' ? currentPath : '';
       const isActiveNav = (path) => path === '/admin'
         ? activePath === '/admin'
         : activePath === path || activePath.startsWith(`${path}/`);
+      const navItems = [
+        { path: '/admin', label: 'Dashboard' },
+        { path: '/admin/businesses', label: 'Businesses' },
+        { path: '/admin/websites', label: 'Websites' },
+        { path: '/admin/mobile-apps', label: 'Mobile Apps' },
+        { path: '/admin/agent-tasks', label: 'Agent Tasks' },
+        { path: '/admin/subscriptions', label: 'Subscriptions' },
+        { path: '/admin/users', label: 'Users' },
+      ];
     %>
-    <nav class="nav">
-      <a class="<%= isActiveNav('/admin') ? 'is-active' : '' %>" <%= isActiveNav('/admin') ? 'aria-current="page"' : '' %> href="/admin">Dashboard</a>
-      <a class="<%= isActiveNav('/admin/businesses') ? 'is-active' : '' %>" <%= isActiveNav('/admin/businesses') ? 'aria-current="page"' : '' %> href="/admin/businesses">Businesses</a>
-      <a class="<%= isActiveNav('/admin/websites') ? 'is-active' : '' %>" <%= isActiveNav('/admin/websites') ? 'aria-current="page"' : '' %> href="/admin/websites">Websites</a>
-      <a class="<%= isActiveNav('/admin/mobile-apps') ? 'is-active' : '' %>" <%= isActiveNav('/admin/mobile-apps') ? 'aria-current="page"' : '' %> href="/admin/mobile-apps">Mobile Apps</a>
-      <a class="<%= isActiveNav('/admin/agent-tasks') ? 'is-active' : '' %>" <%= isActiveNav('/admin/agent-tasks') ? 'aria-current="page"' : '' %> href="/admin/agent-tasks">Agent Tasks</a>
-      <a class="<%= isActiveNav('/admin/subscriptions') ? 'is-active' : '' %>" <%= isActiveNav('/admin/subscriptions') ? 'aria-current="page"' : '' %> href="/admin/subscriptions">Subscriptions</a>
-      <a class="<%= isActiveNav('/admin/users') ? 'is-active' : '' %>" <%= isActiveNav('/admin/users') ? 'aria-current="page"' : '' %> href="/admin/users">Users</a>
+    <nav class="nav" aria-label="Main">
+      <span class="nav-label">Menu</span>
+      <% navItems.forEach((item) => { %>
+        <a
+          class="<%= isActiveNav(item.path) ? 'is-active' : '' %>"
+          href="<%= item.path %>"
+          <%= isActiveNav(item.path) ? 'aria-current="page"' : '' %>
+        >
+          <span class="nav-icon" aria-hidden="true"></span>
+          <%= item.label %>
+        </a>
+      <% }) %>
     </nav>
     <div class="sidebar-account">
       <% if (admin) { %>
@@ -41,6 +63,9 @@
     </div>
   </aside>
   <main class="main">
-    <div class="topbar">
+    <header class="topbar">
       <h1><%= title || 'Admin' %></h1>
-    </div>
+      <% if (typeof pageSubtitle !== 'undefined' && pageSubtitle) { %>
+        <p class="topbar-subtitle"><%= pageSubtitle %></p>
+      <% } %>
+    </header>

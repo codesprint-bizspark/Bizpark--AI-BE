@@ -1,13 +1,13 @@
 <%- include('../partials/header') %>
 
-<section class="subscription-toolbar">
+<section class="subscription-toolbar" aria-label="Subscription plan catalog">
   <div>
     <p class="eyebrow">Plan Catalog</p>
     <h2><%= totalPlans %> subscription plans</h2>
   </div>
   <div class="subscription-toolbar-actions">
-    <input id="plan-search" type="search" placeholder="Search plans">
-    <select id="plan-status-filter">
+    <input id="plan-search" type="search" placeholder="Search plans" aria-label="Search plans">
+    <select id="plan-status-filter" aria-label="Filter by status">
       <option value="ALL">All statuses</option>
       <option value="ACTIVE">Active</option>
       <option value="INACTIVE">Inactive</option>
@@ -15,7 +15,7 @@
       <option value="EXPIRED">Expired</option>
       <option value="DRAFT">Draft</option>
     </select>
-    <button type="button" onclick="openPlanDialog('add-plan-dialog')">Add New Plan</button>
+    <button type="button" class="button button--primary" onclick="openPlanDialog('add-plan-dialog')">Add New Plan</button>
   </div>
 </section>
 
