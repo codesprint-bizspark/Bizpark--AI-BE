@@ -2,15 +2,9 @@
 <%
   const labelize = (value) => String(value || '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase());
   const fmtDate = (d) => d ? new Date(d).toLocaleString() : '—';
-  const badgeClass = (s) => {
-    const map = {
-      REQUESTED: 'background:#dbeafe;color:#1d4ed8',
-      IN_REVIEW: 'background:#fef3c7;color:#b45309',
-      PUBLISHED: 'background:#dcfce7;color:#15803d',
-      REJECTED:  'background:#fee2e2;color:#b91c1c',
-      NONE:      'background:#f1f5f9;color:#475569',
-    };
-    return map[s] || map.NONE;
+  const storeBadgeClass = (s) => {
+    const key = String(s || 'NONE').toLowerCase().replace(/_/g, '-');
+    return `store-badge store-badge--${key}`;
   };
 %>
 
@@ -27,57 +21,53 @@
   </div>
 </section>
 
-<section style="margin-top:1.5rem">
+<section class="mobile-apps-list">
   <% if (!requests.length) { %>
-    <div style="padding:3rem;text-align:center;color:#64748b;border:2px dashed #e2e8f0;border-radius:12px">
+    <div class="mobile-apps-empty">
       No store publishing requests yet.
     </div>
   <% } else { %>
     <% requests.forEach((r) => { %>
-      <article style="border:1px solid #e2e8f0;border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1rem;background:#fff">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap">
+      <article class="mobile-app-card">
+        <div class="mobile-app-card-header">
           <div>
-            <h3 style="margin:0;font-size:1.1rem"><%= r.businessName %></h3>
-            <p style="margin:.25rem 0 0;color:#64748b;font-size:.8rem">
+            <h3><%= r.businessName %></h3>
+            <p class="mobile-app-card-meta">
               Requested: <%= fmtDate(r.storeRequestedAt) %> · Reviewed: <%= fmtDate(r.storeReviewedAt) %>
             </p>
           </div>
-          <span style="font-size:.7rem;font-weight:700;text-transform:uppercase;padding:.25rem .6rem;border-radius:99px;<%= badgeClass(r.storeStatus) %>">
+          <span class="<%= storeBadgeClass(r.storeStatus) %>">
             <%= labelize(r.storeStatus) %>
           </span>
         </div>
 
-        <form method="post" action="/admin/mobile-apps/<%= r.id %>/update"
-              style="margin-top:1rem;display:grid;gap:.75rem;grid-template-columns:1fr 1fr">
-          <label style="font-size:.8rem;font-weight:600">
+        <form method="post" action="/admin/mobile-apps/<%= r.id %>/update" class="mobile-app-form">
+          <label>
             Status
-            <select name="storeStatus" style="width:100%;padding:.5rem;margin-top:.25rem;border:1px solid #cbd5e1;border-radius:8px">
+            <select name="storeStatus">
               <% statuses.forEach((st) => { %>
                 <option value="<%= st %>" <%= r.storeStatus === st ? 'selected' : '' %>><%= labelize(st) %></option>
               <% }) %>
             </select>
           </label>
 
-          <label style="font-size:.8rem;font-weight:600">
+          <label>
             Admin note (shown to user)
-            <input type="text" name="storeNote" value="<%= r.storeNote || '' %>" placeholder="e.g. review ETA / rejection reason"
-                   style="width:100%;padding:.5rem;margin-top:.25rem;border:1px solid #cbd5e1;border-radius:8px" />
+            <input type="text" name="storeNote" value="<%= r.storeNote || '' %>" placeholder="Review ETA or rejection reason">
           </label>
 
-          <label style="font-size:.8rem;font-weight:600">
+          <label>
             Google Play URL
-            <input type="url" name="playStoreUrl" value="<%= r.playStoreUrl || '' %>" placeholder="https://play.google.com/store/apps/..."
-                   style="width:100%;padding:.5rem;margin-top:.25rem;border:1px solid #cbd5e1;border-radius:8px" />
+            <input type="url" name="playStoreUrl" value="<%= r.playStoreUrl || '' %>" placeholder="https://play.google.com/store/apps/...">
           </label>
 
-          <label style="font-size:.8rem;font-weight:600">
+          <label>
             App Store URL
-            <input type="url" name="appStoreUrl" value="<%= r.appStoreUrl || '' %>" placeholder="https://apps.apple.com/app/..."
-                   style="width:100%;padding:.5rem;margin-top:.25rem;border:1px solid #cbd5e1;border-radius:8px" />
+            <input type="url" name="appStoreUrl" value="<%= r.appStoreUrl || '' %>" placeholder="https://apps.apple.com/app/...">
           </label>
 
-          <div style="grid-column:1 / -1;display:flex;justify-content:flex-end">
-            <button type="submit" class="button button--primary">Save</button>
+          <div class="mobile-app-form-actions">
+            <button type="submit" class="button button--primary">Save changes</button>
           </div>
         </form>
       </article>

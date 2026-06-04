@@ -1,21 +1,87 @@
 <%- include('../partials/header') %>
-<div class="stack">
-  <section class="card">
-    <h2><%= website.domain || website.id %></h2>
-    <p>Business: <a href="/admin/businesses/<%= website.businessId %>"><%= website.business?.name || website.businessId %></a></p>
-    <p>Template: <%= website.templateId || '-' %></p>
-    <p>Vercel URL: <% if (website.vercelUrl) { %><a href="<%= website.vercelUrl %>"><%= website.vercelUrl %></a><% } else { %>-<% } %></p>
-    <p>Status: <span class="badge"><%= website.status %></span></p>
-    <div class="actions">
-      <form method="post" action="/admin/websites/<%= website.id %>/publish"><button type="submit">Publish</button></form>
-      <form method="post" action="/admin/websites/<%= website.id %>/unpublish"><button class="secondary" type="submit">Unpublish</button></form>
-      <form method="post" action="/admin/websites/<%= website.id %>/redeploy"><button class="secondary" type="submit">Redeploy</button></form>
-      <form method="post" action="/admin/websites/<%= website.id %>/suspend"><button class="danger" type="submit">Suspend</button></form>
+<%
+  const labelize = (value) => String(value || '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase());
+  const statusClass = (status) => `badge badge--website badge--website-${String(status || 'draft').toLowerCase()}`;
+  const previewUrl = website.vercelUrl
+    ? (/^https?:\/\//.test(website.vercelUrl) ? website.vercelUrl : `https://${website.vercelUrl}`)
+    : (website.domain ? (/^https?:\/\//.test(website.domain) ? website.domain : `https://${website.domain}`) : '');
+%>
+
+<a class="detail-back" href="/admin/websites">&larr; Back to websites</a>
+
+<header class="detail-header">
+  <div class="detail-header-main">
+    <span class="eyebrow">Website</span>
+    <h1><%= website.domain || website.id %></h1>
+    <p class="muted">
+      Business:
+      <a href="/admin/businesses/<%= website.businessId %>"><%= website.business?.name || website.businessId %></a>
+    </p>
+    <div class="detail-meta">
+      <span class="<%= statusClass(website.status) %>"><%= labelize(website.status) %></span>
+      <% if (website.templateId) { %>
+        <span class="badge badge--template"><%= website.templateId %></span>
+      <% } %>
     </div>
+  </div>
+  <div class="detail-actions">
+    <% if (previewUrl) { %>
+      <a class="button button--ghost" href="<%= previewUrl %>" target="_blank" rel="noopener">Preview live</a>
+    <% } %>
+    <form method="post" action="/admin/websites/<%= website.id %>/publish">
+      <button type="submit" class="button button--primary">Publish</button>
+    </form>
+    <form method="post" action="/admin/websites/<%= website.id %>/unpublish">
+      <button type="submit" class="button button--ghost">Unpublish</button>
+    </form>
+    <form method="post" action="/admin/websites/<%= website.id %>/redeploy">
+      <button type="submit" class="button button--ghost">Redeploy</button>
+    </form>
+    <form method="post" action="/admin/websites/<%= website.id %>/suspend">
+      <button type="submit" class="button danger">Suspend</button>
+    </form>
+  </div>
+</header>
+
+<div class="detail-grid">
+  <section class="card detail-section">
+    <h2 class="detail-section-title">Details</h2>
+    <dl class="info-list">
+      <div class="info-row">
+        <dt>Website ID</dt>
+        <dd class="detail-id"><%= website.id %></dd>
+      </div>
+      <div class="info-row">
+        <dt>Template</dt>
+        <dd><%= website.templateId || '—' %></dd>
+      </div>
+      <div class="info-row">
+        <dt>Vercel URL</dt>
+        <dd>
+          <% if (website.vercelUrl) { %>
+            <a href="<%= previewUrl %>" target="_blank" rel="noopener"><%= website.vercelUrl %></a>
+          <% } else { %>—<% } %>
+        </dd>
+      </div>
+      <div class="info-row">
+        <dt>Domain</dt>
+        <dd><%= website.domain || '—' %></dd>
+      </div>
+      <div class="info-row">
+        <dt>Updated</dt>
+        <dd><%= website.updatedAt ? website.updatedAt.toISOString().slice(0, 16).replace('T', ' ') : '—' %></dd>
+      </div>
+      <div class="info-row">
+        <dt>Published</dt>
+        <dd><%= website.publishedAt ? website.publishedAt.toISOString().slice(0, 10) : '—' %></dd>
+      </div>
+    </dl>
   </section>
-  <section class="card">
-    <h2>CMS Data</h2>
-    <pre><%= JSON.stringify(website.cmsData || {}, null, 2) %></pre>
+
+  <section class="card detail-section">
+    <h2 class="detail-section-title">CMS data</h2>
+    <pre class="code-block"><%= JSON.stringify(website.cmsData || {}, null, 2) %></pre>
   </section>
 </div>
+
 <%- include('../partials/footer') %>
