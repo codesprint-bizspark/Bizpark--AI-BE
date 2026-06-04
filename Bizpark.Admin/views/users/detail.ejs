@@ -1,22 +1,64 @@
 <%- include('../partials/header') %>
-<div class="stack">
-  <section class="card">
-    <h2><%= user.name %></h2>
-    <p><%= user.email %></p>
-    <p>Status: <span class="badge"><%= user.isActive ? 'ACTIVE' : 'DISABLED' %></span></p>
+<%
+  const statusClass = user.isActive ? 'badge badge--status badge--status-active' : 'badge badge--status badge--status-suspended';
+%>
+
+<a class="detail-back" href="/admin/users">&larr; Back to users</a>
+
+<header class="detail-header">
+  <div class="detail-header-main">
+    <span class="eyebrow">User</span>
+    <h1><%= user.name || 'Unnamed user' %></h1>
+    <p class="muted"><%= user.email || 'No email on file' %></p>
+    <div class="detail-meta">
+      <span class="<%= statusClass %>"><%= user.isActive ? 'Active' : 'Suspended' %></span>
+      <span class="detail-id"><%= user.id %></span>
+    </div>
+  </div>
+  <div class="detail-actions">
     <form method="post" action="/admin/users/<%= user.id %>/status" class="actions">
-      <select name="isActive">
-        <option value="true" <%= user.isActive ? 'selected' : '' %>>ACTIVE</option>
-        <option value="false" <%= !user.isActive ? 'selected' : '' %>>DISABLED</option>
-      </select>
-      <button type="submit">Update User</button>
+      <label>
+        Account status
+        <select name="isActive">
+          <option value="true" <%= user.isActive ? 'selected' : '' %>>Active</option>
+          <option value="false" <%= !user.isActive ? 'selected' : '' %>>Suspended</option>
+        </select>
+      </label>
+      <button type="submit" class="button button--primary">Update user</button>
     </form>
+  </div>
+</header>
+
+<div class="detail-grid">
+  <section class="card detail-section">
+    <h2 class="detail-section-title">Account</h2>
+    <dl class="info-list">
+      <div class="info-row">
+        <dt>Registered</dt>
+        <dd><%= user.createdAt ? user.createdAt.toISOString().slice(0, 10) : '—' %></dd>
+      </div>
+      <div class="info-row">
+        <dt>Last login</dt>
+        <dd class="muted">Not tracked</dd>
+      </div>
+    </dl>
   </section>
-  <section class="card">
-    <h2>Businesses</h2>
-    <% user.businesses?.forEach((businessUser) => { %>
-      <p><a href="/admin/businesses/<%= businessUser.businessId %>"><%= businessUser.business?.name || businessUser.businessId %></a> <span class="badge"><%= businessUser.role %></span></p>
-    <% }) %>
+
+  <section class="card detail-section">
+    <h2 class="detail-section-title">Businesses (<%= user.businesses?.length || 0 %>)</h2>
+    <% if (user.businesses?.length) { %>
+      <ul class="relation-list">
+        <% user.businesses.forEach((businessUser) => { %>
+          <li class="relation-item">
+            <a href="/admin/businesses/<%= businessUser.businessId %>"><%= businessUser.business?.name || businessUser.businessId %></a>
+            <span class="badge"><%= businessUser.role %></span>
+          </li>
+        <% }) %>
+      </ul>
+    <% } else { %>
+      <p class="muted">This user is not linked to any businesses.</p>
+    <% } %>
   </section>
 </div>
+
 <%- include('../partials/footer') %>
