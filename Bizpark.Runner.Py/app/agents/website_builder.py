@@ -1,22 +1,101 @@
 import json
 import logging
-from typing import TypedDict, Optional
+import re
+from typing import TypedDict, Optional, List, Literal
 
+from langchain_openai import ChatOpenAI
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langgraph.graph import StateGraph, END
+from pydantic import BaseModel, ValidationError
 
 from app.config import settings
 
+
+# ── Output schema ─────────────────────────────────────────────────────────────
+
+class _FeatureItem(BaseModel):
+    icon: Literal["truck", "refresh", "shield", "headphones", "sparkles"]
+    title: str
+    description: str
+
+class _HeroContent(BaseModel):
+    title: str
+    subtitle: str
+    ctaText: str
+    ctaLink: str = "/shop"
+
+class _AnnouncementContent(BaseModel):
+    enabled: bool = True
+    text: str
+
+class _AboutContent(BaseModel):
+    title: str
+    text: str
+
+class _FooterContent(BaseModel):
+    contactEmail: str
+
+class _SeoContent(BaseModel):
+    metaDescription: str
+    keywords: str
+
+class _WebsiteContent(BaseModel):
+    announcement: _AnnouncementContent
+    hero: _HeroContent
+    features: List[_FeatureItem]
+    about: _AboutContent
+    footer: _FooterContent
+    seo: _SeoContent
+
+class WebsiteGenerationOutput(BaseModel):
+    businessName: str
+    tagline: str
+    primaryColor: str
+    secondaryColor: str
+    content: _WebsiteContent
+
 logger = logging.getLogger("runner.agents.website_builder")
 
-# Instantiate once at module load — avoid per-call overhead
-_llm = ChatGoogleGenerativeAI(
-    model="gemini-2.5-flash",
-    google_api_key=settings.gemini_api_key,
-    temperature=0.4,
-    thinking_budget=0,
-    model_kwargs={"generation_config": {"response_mime_type": "application/json"}},
-)
+_openai_llm: Optional[ChatOpenAI] = None
+_gemini_llm: Optional[ChatGoogleGenerativeAI] = None
+_minimax_llm: Optional[ChatOpenAI] = None
+
+
+def _get_openai():
+    global _openai_llm
+    if _openai_llm is None and settings.openai_api_key:
+        _openai_llm = ChatOpenAI(
+            model="gpt-4o",
+            api_key=settings.openai_api_key,
+            temperature=0.4,
+            model_kwargs={"response_format": {"type": "json_object"}},
+        )
+    return _openai_llm
+
+
+def _get_gemini():
+    global _gemini_llm
+    if _gemini_llm is None and settings.gemini_api_key:
+        _gemini_llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash",
+            google_api_key=settings.gemini_api_key,
+            temperature=0.4,
+            model_kwargs={"generation_config": {"response_mime_type": "application/json"}},
+        )
+    return _gemini_llm
+
+
+def _get_minimax():
+    global _minimax_llm
+    if _minimax_llm is None and settings.minimax_api_key:
+        _minimax_llm = ChatOpenAI(
+            model="MiniMax-Text-01",
+            api_key=settings.minimax_api_key,
+            base_url="https://api.minimaxi.chat/v1",
+            temperature=0.4,
+            # MiniMax does not support OpenAI-style response_format — JSON via prompt only
+        )
+    return _minimax_llm
 
 
 class WebsiteState(TypedDict):
@@ -34,7 +113,7 @@ def validate_input(state: WebsiteState) -> WebsiteState:
     return {**state, "error": None}
 
 
-def generate_with_gemini(state: WebsiteState) -> WebsiteState:
+def generate_with_openai(state: WebsiteState) -> WebsiteState:
     if state.get("error"):
         return state
 
@@ -119,24 +198,41 @@ Return ONLY a valid JSON object — no markdown, no explanation, no extra text:
   }}
 }}"""
 
-    try:
-        response = _llm.invoke(prompt)
-        raw_text = response.content.strip()
+    def _parse(raw: str) -> dict:
+        raw = re.sub(r"^```(?:json)?\s*\n?", "", raw.strip(), flags=re.IGNORECASE)
+        raw = re.sub(r"\n?```\s*$", "", raw.strip()).strip()
+        return json.loads(raw)
 
-        # Fallback strip in case model ignores mime type
-        if raw_text.startswith("```"):
-            raw_text = raw_text.split("```")[1]
-            if raw_text.startswith("json"):
-                raw_text = raw_text[4:]
-            raw_text = raw_text.strip()
+    # Fallback chain: Gemini → MiniMax → OpenAI (OpenAI last due to quota limits)
+    candidates = [
+        ("Gemini",   _get_gemini()),
+        ("MiniMax",  _get_minimax()),
+        ("OpenAI",   _get_openai()),
+    ]
+    candidates = [(name, llm) for name, llm in candidates if llm]
+    if not candidates:
+        return {**state, "error": "No LLM available — set OPENAI_API_KEY, GEMINI_API_KEY, or MINIMAX_API_KEY"}
 
-        generated = json.loads(raw_text)
-        logger.info(f"Gemini generated full config for {business_name}")
-        return {**state, "generated_content": generated}
+    last_error = ""
+    errors: list[str] = []
+    for provider, llm in candidates:
+        try:
+            response = llm.invoke(prompt)
+            generated = _parse(response.content)
+            try:
+                WebsiteGenerationOutput.model_validate(generated)
+            except ValidationError as ve:
+                logger.error(f"Website builder schema validation failed ({provider}): {ve}")
+                return {**state, "error": f"AI output did not match expected schema: {ve}"}
+            logger.info(f"{provider} generated full config for {business_name}")
+            return {**state, "generated_content": generated}
+        except Exception as e:
+            last_error = str(e)
+            errors.append(f"{provider}: {last_error[:200]}")
+            logger.warning(f"{provider} failed: {e} — trying next provider")
 
-    except Exception as e:
-        logger.error(f"Gemini generation failed: {e}")
-        return {**state, "error": str(e)}
+    logger.error(f"All providers failed. Last error: {last_error}")
+    return {**state, "error": f"All AI providers failed — {'; '.join(errors)}"}
 
 
 def should_end_on_error(state: WebsiteState) -> str:
@@ -145,7 +241,7 @@ def should_end_on_error(state: WebsiteState) -> str:
 
 _builder = StateGraph(WebsiteState)
 _builder.add_node("validate", validate_input)
-_builder.add_node("generate", generate_with_gemini)
+_builder.add_node("generate", generate_with_openai)
 _builder.set_entry_point("validate")
 _builder.add_conditional_edges("validate", should_end_on_error, {"generate": "generate", "end": END})
 _builder.add_edge("generate", END)

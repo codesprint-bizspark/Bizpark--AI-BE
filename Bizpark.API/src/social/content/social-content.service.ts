@@ -1,0 +1,352 @@
+import { BadRequestException, ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
+import {
+    AiGenerationKind,
+    ApiSocialPostEntity,
+    applicationDb,
+    AttachMediaDto,
+    BulkAttachMediaDto,
+    GenerateSocialContentDto,
+    RegenerateContentFieldDto,
+    SocialMediaKind,
+    SocialMediaSource,
+    SocialPlatform,
+    SocialPostStatus,
+    TaskType,
+    UpdatePostContentDto,
+} from 'bizpark.core';
+import { AgentService } from '../../agent/agent.service';
+import { OpenAiService } from '../ai/openai.service';
+import {
+    BusinessBrief,
+    buildFieldRegenerationPrompt,
+} from '../ai/prompts';
+
+@Injectable()
+export class SocialContentService {
+    private readonly logger = new Logger(SocialContentService.name);
+
+    constructor(
+        private readonly openai: OpenAiService,
+        private readonly agentService: AgentService,
+    ) { }
+
+    async generateForBusiness(args: { dto: GenerateSocialContentDto; userId: string }): Promise<{
+        taskId: string;
+        status: string;
+    }> {
+        const dto = args.dto;
+        const business = await applicationDb.business.findUnique({ where: { id: dto.businessId } });
+        if (!business) throw new NotFoundException('Business not found');
+        if (!dto.platforms?.length) throw new BadRequestException('At least one platform required');
+        if (!dto.postType) throw new BadRequestException('postType required');
+
+        const userMediaCount = dto.userMedia?.length ?? 0;
+        if (userMediaCount > 0) {
+            const totalBytes = (dto.userMedia ?? []).reduce((acc, m) => acc + (m.sizeBytes ?? 0), 0);
+            this.logger.log(
+                `Queueing social-content task with ${userMediaCount} user-uploaded media (~${Math.round(totalBytes / 1024)} KB) for business ${dto.businessId}`,
+            );
+        }
+
+        const result = await this.agentService.queueTask({
+            businessId: dto.businessId,
+            taskType: TaskType.SOCIAL_MEDIA_CONTENT,
+            inputData: { dto, userId: args.userId },
+        });
+
+        return { taskId: result.taskId, status: result.status };
+    }
+
+    async regenerateField(args: {
+        postId: string;
+        businessId: string;
+        userId: string;
+        dto: RegenerateContentFieldDto;
+    }): Promise<ApiSocialPostEntity> {
+        const post = await applicationDb.socialPost.findUnique({ where: { id: args.postId } });
+        if (!post) throw new NotFoundException('Post not found');
+        if (post.businessId !== args.businessId) throw new ForbiddenException('Post does not belong to this business');
+
+        const business = await applicationDb.business.findUnique({ where: { id: post.businessId }, include: { websites: true } });
+        if (!business) throw new NotFoundException('Business not found');
+        const brief = this.buildBusinessBrief(business);
+
+        const prompt = buildFieldRegenerationPrompt({
+            business: brief,
+            platform: post.platform,
+            field: args.dto.field,
+            current: {
+                caption: post.caption,
+                cta: post.cta,
+                hashtags: post.hashtags,
+                aiMetadata: post.aiMetadata,
+            },
+            instructions: args.dto.instructions,
+        });
+
+        const t0 = Date.now();
+        const completion = await this.openai.chatJson(prompt, { temperature: 0.95 });
+        const parsed = this.openai.parseJson<Record<string, unknown>>(completion.text);
+        const latencyMs = Date.now() - t0;
+
+        await applicationDb.aiGeneration.create({
+            data: {
+                businessId: post.businessId,
+                postId: post.id,
+                platform: post.platform,
+                kind: this.kindFromField(args.dto.field),
+                model: completion.model,
+                input: { current: post, instructions: args.dto.instructions, field: args.dto.field },
+                output: parsed,
+                promptTokens: completion.promptTokens,
+                completionTokens: completion.completionTokens,
+                latencyMs,
+                createdByUserId: args.userId,
+            },
+        });
+
+        const patch: Partial<ApiSocialPostEntity> = {};
+        if (typeof parsed.caption === 'string') patch.caption = parsed.caption;
+        if (Array.isArray(parsed.hashtags)) patch.hashtags = this.sanitiseHashtags(parsed.hashtags as string[]);
+        if (typeof parsed.cta === 'string') patch.cta = parsed.cta;
+        if (parsed.imagePrompt || parsed.flyerPrompt || parsed.videoScript || parsed.videoConcept) {
+            patch.aiMetadata = {
+                ...(post.aiMetadata ?? {}),
+                ...(typeof parsed.imagePrompt === 'string' ? { imagePrompt: parsed.imagePrompt } : {}),
+                ...(typeof parsed.flyerPrompt === 'string' ? { flyerPrompt: parsed.flyerPrompt } : {}),
+                ...(parsed.videoScript ? { videoScript: parsed.videoScript } : {}),
+                ...(typeof parsed.videoConcept === 'string' ? { videoConcept: parsed.videoConcept } : {}),
+            };
+        }
+
+        return applicationDb.socialPost.update({ where: { id: post.id }, data: patch });
+    }
+
+    async updatePost(args: { postId: string; businessId: string; dto: UpdatePostContentDto }): Promise<ApiSocialPostEntity> {
+        const post = await applicationDb.socialPost.findUnique({ where: { id: args.postId } });
+        if (!post) throw new NotFoundException('Post not found');
+        if (post.businessId !== args.businessId) throw new ForbiddenException('Forbidden');
+        if (post.status === SocialPostStatus.PUBLISHED) throw new BadRequestException('Cannot edit a published post');
+
+        const patch: Partial<ApiSocialPostEntity> = {};
+        if (args.dto.caption !== undefined) patch.caption = args.dto.caption;
+        if (args.dto.cta !== undefined) patch.cta = args.dto.cta;
+        if (args.dto.hashtags !== undefined) patch.hashtags = this.sanitiseHashtags(args.dto.hashtags);
+        if (args.dto.scheduledAt !== undefined) {
+            patch.scheduledAt = args.dto.scheduledAt ? new Date(args.dto.scheduledAt) : null;
+        }
+        if (args.dto.platform !== undefined) patch.platform = args.dto.platform;
+        if (args.dto.postType !== undefined) patch.postType = args.dto.postType;
+        if (args.dto.accountId !== undefined) patch.accountId = args.dto.accountId;
+        if (args.dto.aiMetadata !== undefined) patch.aiMetadata = args.dto.aiMetadata;
+
+        return applicationDb.socialPost.update({ where: { id: args.postId }, data: patch });
+    }
+
+    async listPosts(args: { businessId: string; status?: SocialPostStatus; platform?: SocialPlatform; take?: number }) {
+        return applicationDb.socialPost.findMany({
+            where: { businessId: args.businessId, status: args.status, platform: args.platform },
+            orderBy: { createdAt: 'desc' },
+            take: args.take,
+        });
+    }
+
+    async getPost(args: { businessId: string; postId: string }) {
+        const post = await applicationDb.socialPost.findUnique({
+            where: { id: args.postId },
+            include: { media: true, logs: true },
+        });
+        if (!post) throw new NotFoundException('Post not found');
+        if (post.businessId !== args.businessId) throw new ForbiddenException('Forbidden');
+        return post;
+    }
+
+    async deletePost(args: { businessId: string; postId: string }) {
+        const post = await applicationDb.socialPost.findUnique({ where: { id: args.postId } });
+        if (!post) throw new NotFoundException('Post not found');
+        if (post.businessId !== args.businessId) throw new ForbiddenException('Forbidden');
+        if (post.status === SocialPostStatus.PUBLISHING) {
+            throw new BadRequestException('Cannot cancel a post that is currently publishing');
+        }
+        return applicationDb.socialPost.softDelete({ where: { id: post.id } });
+    }
+
+    async attachMedia(args: { businessId: string; postId: string; dto: AttachMediaDto }) {
+        const post = await applicationDb.socialPost.findUnique({ where: { id: args.postId } });
+        if (!post) throw new NotFoundException('Post not found');
+        if (post.businessId !== args.businessId) throw new ForbiddenException('Forbidden');
+        if (post.status === SocialPostStatus.PUBLISHED) throw new BadRequestException('Cannot modify a published post');
+
+        return applicationDb.socialPostMedia.create({
+            data: {
+                postId: post.id,
+                kind: args.dto.kind,
+                source: args.dto.source ?? SocialMediaSource.USER_UPLOAD,
+                url: args.dto.url,
+                mimeType: args.dto.mimeType ?? null,
+                width: args.dto.width ?? null,
+                height: args.dto.height ?? null,
+                durationMs: args.dto.durationMs ?? null,
+                position: args.dto.position ?? 0,
+                prompt: args.dto.prompt ?? null,
+                metadata: args.dto.metadata ?? null,
+            },
+        });
+    }
+
+    /**
+     * Accept raw file buffers (from multipart/form-data) and persist them as
+     * SocialPostMedia rows. Bytes are stored as base64 data URLs to match the
+     * AI-generated image storage format the rest of the platform already
+     * understands (FacebookClient.uploadMedia already handles both forms).
+     */
+    async uploadMediaFiles(args: {
+        businessId: string;
+        postId: string;
+        files: Array<{ originalName: string; mimeType: string; size: number; buffer: Buffer }>;
+    }) {
+        const post = await applicationDb.socialPost.findUnique({ where: { id: args.postId } });
+        if (!post) throw new NotFoundException('Post not found');
+        if (post.businessId !== args.businessId) throw new ForbiddenException('Forbidden');
+        if (post.status === SocialPostStatus.PUBLISHED) throw new BadRequestException('Cannot modify a published post');
+        if (!args.files?.length) throw new BadRequestException('At least one file is required');
+
+        const existing = await applicationDb.socialPostMedia.findManyByPost({ postId: post.id });
+        const baseIndex = existing.length;
+
+        const created: any[] = [];
+        for (let i = 0; i < args.files.length; i++) {
+            const f = args.files[i];
+            const mime = (f.mimeType || '').toLowerCase();
+            const kind: SocialMediaKind = mime.startsWith('video/')
+                ? SocialMediaKind.VIDEO
+                : mime.startsWith('image/')
+                    ? SocialMediaKind.IMAGE
+                    : SocialMediaKind.IMAGE; // fallback — keep going so a single odd MIME doesn't fail the batch
+            const url = `data:${f.mimeType || (kind === SocialMediaKind.VIDEO ? 'video/mp4' : 'image/png')};base64,${f.buffer.toString('base64')}`;
+
+            const row = await applicationDb.socialPostMedia.create({
+                data: {
+                    postId: post.id,
+                    kind,
+                    source: SocialMediaSource.USER_UPLOAD,
+                    url,
+                    mimeType: f.mimeType || null,
+                    position: baseIndex + i,
+                    metadata: { originalName: f.originalName, sizeBytes: f.size },
+                },
+            });
+            created.push(row);
+            this.logger.log(`Uploaded media for post ${post.id}: ${f.originalName} (${f.size} bytes, ${kind})`);
+        }
+        return created;
+    }
+
+    /**
+     * Attach many user-uploaded files (images / videos) to a post in one round-trip.
+     * Existing media on the post keeps its position; new items are appended in
+     * the order they appear in `dto.items`.
+     */
+    async bulkAttachMedia(args: { businessId: string; postId: string; dto: BulkAttachMediaDto }) {
+        const post = await applicationDb.socialPost.findUnique({ where: { id: args.postId } });
+        if (!post) throw new NotFoundException('Post not found');
+        if (post.businessId !== args.businessId) throw new ForbiddenException('Forbidden');
+        if (post.status === SocialPostStatus.PUBLISHED) throw new BadRequestException('Cannot modify a published post');
+        if (!args.dto.items?.length) throw new BadRequestException('At least one media item is required');
+
+        const existing = await applicationDb.socialPostMedia.findManyByPost({ postId: post.id });
+        const baseIndex = existing.length;
+
+        const created: any[] = [];
+        for (let i = 0; i < args.dto.items.length; i++) {
+            const item = args.dto.items[i];
+            if (!item.url) throw new BadRequestException(`Media item #${i + 1} is missing url`);
+            if (!item.kind) throw new BadRequestException(`Media item #${i + 1} is missing kind`);
+
+            const row = await applicationDb.socialPostMedia.create({
+                data: {
+                    postId: post.id,
+                    kind: item.kind,
+                    source: item.source ?? SocialMediaSource.USER_UPLOAD,
+                    url: item.url,
+                    mimeType: item.mimeType ?? null,
+                    width: item.width ?? null,
+                    height: item.height ?? null,
+                    durationMs: item.durationMs ?? null,
+                    position: item.position ?? baseIndex + i,
+                    prompt: item.prompt ?? null,
+                    metadata: item.metadata ?? null,
+                },
+            });
+            created.push(row);
+        }
+        return created;
+    }
+
+    async removeMedia(args: { businessId: string; postId: string; mediaId: string }) {
+        const post = await applicationDb.socialPost.findUnique({ where: { id: args.postId } });
+        if (!post) throw new NotFoundException('Post not found');
+        if (post.businessId !== args.businessId) throw new ForbiddenException('Forbidden');
+        return applicationDb.socialPostMedia.softDelete({ where: { id: args.mediaId } });
+    }
+
+    async generateImageForPost(args: { businessId: string; postId: string; prompt?: string }) {
+        const post = await applicationDb.socialPost.findUnique({ where: { id: args.postId } });
+        if (!post) throw new NotFoundException('Post not found');
+        if (post.businessId !== args.businessId) throw new ForbiddenException('Forbidden');
+
+        const meta = (post.aiMetadata ?? {}) as Record<string, unknown>;
+        const fallbackPrompt = (meta.imagePrompt as string | undefined) || (meta.flyerPrompt as string | undefined);
+        const finalPrompt = args.prompt || fallbackPrompt;
+        if (!finalPrompt) throw new BadRequestException('No image prompt available — provide one explicitly or regenerate image_prompt first');
+
+        const img = await this.openai.generateImage({ prompt: finalPrompt });
+        return applicationDb.socialPostMedia.create({
+            data: {
+                postId: post.id,
+                kind: SocialMediaKind.IMAGE,
+                source: SocialMediaSource.AI_GENERATED,
+                url: img.url,
+                mimeType: 'image/png',
+                prompt: img.promptUsed,
+                metadata: { model: img.model, size: img.size },
+            },
+        });
+    }
+
+    // ── Helpers ──────────────────────────────────────────────────────────
+
+    private buildBusinessBrief(business: any): BusinessBrief {
+        const website = business.websites?.[0];
+        const cms = website?.cmsData as Record<string, any> | null | undefined;
+        return {
+            id: business.id,
+            name: business.name,
+            category: business.category ?? null,
+            description: business.description ?? null,
+            logoUrl: business.logoUrl ?? null,
+            websiteSnapshot: cms ?? null,
+            primaryColor: cms?.primaryColor ?? null,
+            secondaryColor: cms?.secondaryColor ?? null,
+            keywords: cms?.content?.seo?.keywords ?? null,
+        };
+    }
+
+    private sanitiseHashtags(input: string[]): string[] {
+        return input
+            .map((h) => h.trim().replace(/^#+/, '').replace(/\s+/g, '').toLowerCase())
+            .filter(Boolean)
+            .slice(0, 30);
+    }
+
+    private kindFromField(field: RegenerateContentFieldDto['field']): AiGenerationKind {
+        switch (field) {
+            case 'caption': return AiGenerationKind.CAPTION;
+            case 'hashtags': return AiGenerationKind.HASHTAGS;
+            case 'cta': return AiGenerationKind.CAPTION;
+            case 'image_prompt': return AiGenerationKind.IMAGE_PROMPT;
+            case 'flyer_prompt': return AiGenerationKind.FLYER_PROMPT;
+            case 'video_script': return AiGenerationKind.VIDEO_SCRIPT;
+        }
+    }
+}

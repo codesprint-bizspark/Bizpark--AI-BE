@@ -1,16 +1,34 @@
-import { DataSource, In } from 'typeorm';
+import { DataSource, In, IsNull } from 'typeorm';
 import { getAdminDataSource, getApplicationDataSource, getRunnerDataSource } from './datasources';
 import {
+    AdminAuditLogEntity,
     AdminTemplateEntity,
+    AdminUserEntity,
+    ApiAiGenerationEntity,
     ApiBusinessEntity,
     ApiBusinessUserEntity,
+    ApiMobileAppEntity,
+    ApiPublishingLogEntity,
+    ApiSocialAccountEntity,
+    ApiSocialPostEntity,
+    ApiSocialPostMediaEntity,
+    ApiSubscriptionEntity,
     ApiGoogleBusinessConnectionEntity,
     ApiGoogleBusinessReviewEntity,
+    ApiMcpApiKeyEntity,
     ApiUserEntity,
     ApiWebsiteEntity,
+    BusinessStatus,
+    MobileAppStatus,
     RunnerAgentTaskEntity,
+    SocialAccountStatus,
+    SocialPlatform,
+    SocialPostStatus,
+    SubscriptionStatus,
     SubscriptionTier,
+    TaskStatus,
     UserRole,
+    WebsiteStatus,
 } from './entities';
 
 type OrderDirection = 'asc' | 'desc' | 'ASC' | 'DESC';
@@ -63,6 +81,40 @@ const createApplicationClient = () => ({
             const entity = repo.create(args.data);
             return repo.save(entity);
         },
+        findMany: async (args?: { orderBy?: { createdAt?: OrderDirection } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiUserEntity);
+            return repo.find({
+                relations: ['businesses', 'businesses.business'],
+                order: args?.orderBy?.createdAt
+                    ? { createdAt: resolveOrder(args.orderBy.createdAt) as 'ASC' | 'DESC' }
+                    : undefined,
+            });
+        },
+        update: async (args: { where: { id: string }; data: Partial<ApiUserEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiUserEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) {
+                throw new Error(`User ${args.where.id} not found`);
+            }
+            repo.merge(existing, args.data);
+            return repo.save(existing);
+        },
+        delete: async (args: { where: { id: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiUserEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) {
+                throw new Error(`User ${args.where.id} not found`);
+            }
+            await repo.delete({ id: args.where.id });
+            return existing;
+        },
+        count: async () => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiUserEntity).count();
+        },
     },
     business: {
         create: async (args: {
@@ -72,6 +124,7 @@ const createApplicationClient = () => ({
                 description?: string | null;
                 logoUrl?: string | null;
                 subscriptionTier?: SubscriptionTier;
+                status?: BusinessStatus;
                 users?: {
                     create?: { userId: string; role?: UserRole | string } | Array<{ userId: string; role?: UserRole | string }>;
                 };
@@ -80,7 +133,10 @@ const createApplicationClient = () => ({
             const ds = await ensureDataSourceInitialized(getApplicationDataSource());
             return ds.transaction(async (manager) => {
                 const { users, ...businessData } = args.data;
-                const business = manager.create(ApiBusinessEntity, businessData);
+                const business = manager.create(ApiBusinessEntity, {
+                    ...businessData,
+                    status: businessData.status ?? BusinessStatus.ACTIVE,
+                });
                 const savedBusiness = await manager.save(ApiBusinessEntity, business);
 
                 const createUsers = users?.create
@@ -122,12 +178,32 @@ const createApplicationClient = () => ({
 
             return qb.getMany();
         },
-        findUnique: async (args: { where: { id: string }; include?: { websites?: boolean } }) => {
+        findUnique: async (args: { where: { id: string }; include?: { websites?: boolean; mobileApps?: boolean } }) => {
             const ds = await ensureDataSourceInitialized(getApplicationDataSource());
             const repo = ds.getRepository(ApiBusinessEntity);
+            const relations: string[] = [];
+            if (args.include?.websites) relations.push('websites');
+            if (args.include?.mobileApps) relations.push('mobileApps');
             return repo.findOne({
                 where: { id: args.where.id },
-                relations: args.include?.websites ? ['websites'] : [],
+                relations,
+            });
+        },
+        findForAdmin: async (args?: { orderBy?: { createdAt?: OrderDirection } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiBusinessEntity);
+            return repo.find({
+                relations: ['users', 'users.user', 'websites', 'subscriptions'],
+                order: args?.orderBy?.createdAt
+                    ? { createdAt: resolveOrder(args.orderBy.createdAt) as 'ASC' | 'DESC' }
+                    : { createdAt: 'DESC' },
+            });
+        },
+        findUniqueForAdmin: async (args: { where: { id: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiBusinessEntity).findOne({
+                where: { id: args.where.id },
+                relations: ['users', 'users.user', 'websites', 'subscriptions'],
             });
         },
         update: async (args: { where: { id: string }; data: Partial<ApiBusinessEntity> }) => {
@@ -139,6 +215,12 @@ const createApplicationClient = () => ({
             }
             repo.merge(existing, args.data);
             return repo.save(existing);
+        },
+        count: async (args?: { where?: { status?: BusinessStatus } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiBusinessEntity).count({
+                where: args?.where?.status ? { status: args.where.status } : undefined,
+            });
         },
     },
     website: {
@@ -161,8 +243,386 @@ const createApplicationClient = () => ({
             const created = repo.create({
                 ...args.create,
                 domain,
+                status: args.create.status ?? WebsiteStatus.DRAFT,
             });
             return repo.save(created);
+        },
+        findMany: async (args?: { orderBy?: { createdAt?: OrderDirection } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiWebsiteEntity).find({
+                relations: ['business'],
+                order: args?.orderBy?.createdAt
+                    ? { createdAt: resolveOrder(args.orderBy.createdAt) as 'ASC' | 'DESC' }
+                    : { createdAt: 'DESC' },
+            });
+        },
+        findUnique: async (args: { where: { id: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiWebsiteEntity).findOne({
+                where: { id: args.where.id },
+                relations: ['business'],
+            });
+        },
+        findFirstByBusinessId: async (args: { businessId: string }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiWebsiteEntity).findOne({
+                where: { businessId: args.businessId },
+                relations: ['business'],
+                order: { createdAt: 'DESC' },
+            });
+        },
+        update: async (args: { where: { id: string }; data: Partial<ApiWebsiteEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiWebsiteEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) {
+                throw new Error(`Website ${args.where.id} not found`);
+            }
+            repo.merge(existing, args.data);
+            return repo.save(existing);
+        },
+        delete: async (args: { where: { id: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiWebsiteEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) {
+                throw new Error(`Website ${args.where.id} not found`);
+            }
+            await repo.delete({ id: args.where.id });
+            return existing;
+        },
+        count: async (args?: { where?: { status?: WebsiteStatus } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiWebsiteEntity).count({
+                where: args?.where?.status ? { status: args.where.status } : undefined,
+            });
+        },
+    },
+    mobileApp: {
+        findFirstByBusinessId: async (args: { businessId: string }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiMobileAppEntity).findOne({
+                where: { businessId: args.businessId },
+                relations: ['business'],
+                order: { createdAt: 'DESC' },
+            });
+        },
+        findMany: async (args?: {
+            where?: { storeStatusIn?: string[] };
+            orderBy?: { storeRequestedAt?: OrderDirection; createdAt?: OrderDirection };
+        }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiMobileAppEntity);
+            const where = args?.where?.storeStatusIn?.length
+                ? { storeStatus: In(args.where.storeStatusIn) }
+                : undefined;
+            const order: Record<string, 'ASC' | 'DESC'> = {};
+            const reqOrder = resolveOrder(args?.orderBy?.storeRequestedAt);
+            const createdOrder = resolveOrder(args?.orderBy?.createdAt);
+            if (reqOrder) order.storeRequestedAt = reqOrder;
+            if (createdOrder) order.createdAt = createdOrder;
+            return repo.find({
+                where,
+                relations: ['business'],
+                order: Object.keys(order).length ? order : { createdAt: 'DESC' },
+            });
+        },
+        findUnique: async (args: { where: { id: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiMobileAppEntity).findOne({
+                where: { id: args.where.id },
+                relations: ['business'],
+            });
+        },
+        upsert: async (args: {
+            where: { businessId: string };
+            update: Partial<ApiMobileAppEntity>;
+            create: Partial<ApiMobileAppEntity>;
+        }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiMobileAppEntity);
+            const existing = await repo.findOne({ where: { businessId: args.where.businessId } });
+            if (existing) {
+                repo.merge(existing, args.update);
+                return repo.save(existing);
+            }
+            const created = repo.create({
+                ...args.create,
+                businessId: args.where.businessId,
+                status: args.create.status ?? MobileAppStatus.DRAFT,
+            });
+            return repo.save(created);
+        },
+        update: async (args: { where: { id: string }; data: Partial<ApiMobileAppEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiMobileAppEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) {
+                throw new Error(`MobileApp ${args.where.id} not found`);
+            }
+            repo.merge(existing, args.data);
+            return repo.save(existing);
+        },
+        count: async (args?: { where?: { status?: MobileAppStatus } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiMobileAppEntity).count({
+                where: args?.where?.status ? { status: args.where.status } : undefined,
+            });
+        },
+    },
+    subscription: {
+        findMany: async (args?: { orderBy?: { createdAt?: OrderDirection } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiSubscriptionEntity).find({
+                relations: ['business'],
+                order: args?.orderBy?.createdAt
+                    ? { createdAt: resolveOrder(args.orderBy.createdAt) as 'ASC' | 'DESC' }
+                    : { createdAt: 'DESC' },
+            });
+        },
+        findLatestForBusiness: async (args: { businessId: string }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiSubscriptionEntity).findOne({
+                where: { businessId: args.businessId },
+                order: { createdAt: 'DESC' },
+            });
+        },
+        upsertForBusiness: async (args: {
+            businessId: string;
+            data: Partial<ApiSubscriptionEntity> & { tier?: SubscriptionTier; status?: SubscriptionStatus };
+        }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSubscriptionEntity);
+            const existing = await repo.findOne({
+                where: { businessId: args.businessId },
+                order: { createdAt: 'DESC' },
+            });
+            if (existing) {
+                repo.merge(existing, args.data);
+                return repo.save(existing);
+            }
+            return repo.save(repo.create({ ...args.data, businessId: args.businessId }));
+        },
+        count: async (args?: { where?: { status?: SubscriptionStatus } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiSubscriptionEntity).count({
+                where: args?.where?.status ? { status: args.where.status } : undefined,
+            });
+        },
+    },
+    socialAccount: {
+        findMany: async (args: {
+            where: { businessId: string; platform?: SocialPlatform; status?: SocialAccountStatus };
+        }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialAccountEntity);
+            const where: Record<string, unknown> = {
+                businessId: args.where.businessId,
+                deletedAt: IsNull(),
+            };
+            if (args.where.platform) where.platform = args.where.platform;
+            if (args.where.status) where.status = args.where.status;
+            return repo.find({ where, order: { createdAt: 'DESC' } });
+        },
+        findUnique: async (args: { where: { id: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiSocialAccountEntity).findOne({ where: { id: args.where.id } });
+        },
+        findActiveByBusinessAndPlatform: async (args: {
+            businessId: string;
+            platform: SocialPlatform;
+            externalAccountId?: string;
+        }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const where: Record<string, unknown> = {
+                businessId: args.businessId,
+                platform: args.platform,
+                deletedAt: IsNull(),
+            };
+            if (args.externalAccountId) where.externalAccountId = args.externalAccountId;
+            return ds.getRepository(ApiSocialAccountEntity).findOne({ where, order: { createdAt: 'DESC' } });
+        },
+        upsert: async (args: { data: Partial<ApiSocialAccountEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialAccountEntity);
+            if (!args.data.businessId || !args.data.platform || !args.data.externalAccountId) {
+                throw new Error('businessId, platform and externalAccountId are required');
+            }
+            const existing = await repo.findOne({
+                where: {
+                    businessId: args.data.businessId,
+                    platform: args.data.platform,
+                    externalAccountId: args.data.externalAccountId,
+                    deletedAt: IsNull(),
+                },
+            });
+            if (existing) {
+                repo.merge(existing, { ...args.data, status: args.data.status ?? SocialAccountStatus.CONNECTED });
+                return repo.save(existing);
+            }
+            const entity = repo.create({
+                ...args.data,
+                status: args.data.status ?? SocialAccountStatus.CONNECTED,
+            });
+            return repo.save(entity);
+        },
+        update: async (args: { where: { id: string }; data: Partial<ApiSocialAccountEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialAccountEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) throw new Error(`SocialAccount ${args.where.id} not found`);
+            repo.merge(existing, args.data);
+            return repo.save(existing);
+        },
+        softDelete: async (args: { where: { id: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialAccountEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) return null;
+            existing.status = SocialAccountStatus.DISCONNECTED;
+            existing.deletedAt = new Date();
+            return repo.save(existing);
+        },
+    },
+    socialPost: {
+        create: async (args: { data: Partial<ApiSocialPostEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialPostEntity);
+            return repo.save(repo.create(args.data));
+        },
+        findUnique: async (args: { where: { id: string }; include?: { media?: boolean; logs?: boolean } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const relations: string[] = [];
+            if (args.include?.media) relations.push('media');
+            if (args.include?.logs) relations.push('publishingLogs');
+            return ds.getRepository(ApiSocialPostEntity).findOne({
+                where: { id: args.where.id },
+                relations,
+            });
+        },
+        findMany: async (args: {
+            where: { businessId: string; status?: SocialPostStatus; platform?: SocialPlatform };
+            orderBy?: { createdAt?: OrderDirection; scheduledAt?: OrderDirection };
+            take?: number;
+        }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialPostEntity);
+            const where: Record<string, unknown> = {
+                businessId: args.where.businessId,
+                deletedAt: IsNull(),
+            };
+            if (args.where.status) where.status = args.where.status;
+            if (args.where.platform) where.platform = args.where.platform;
+            const order: Record<string, 'ASC' | 'DESC'> = {};
+            if (args.orderBy?.scheduledAt) {
+                order.scheduledAt = resolveOrder(args.orderBy.scheduledAt) as 'ASC' | 'DESC';
+            }
+            if (args.orderBy?.createdAt) {
+                order.createdAt = resolveOrder(args.orderBy.createdAt) as 'ASC' | 'DESC';
+            }
+            if (Object.keys(order).length === 0) order.createdAt = 'DESC';
+            return repo.find({ where, order, take: args.take, relations: ['media'] });
+        },
+        findDueForPublishing: async (args: { now: Date; limit?: number }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialPostEntity);
+            return repo
+                .createQueryBuilder('post')
+                .where('post.status = :status', { status: SocialPostStatus.SCHEDULED })
+                .andWhere('post.scheduledAt <= :now', { now: args.now })
+                .andWhere('post.deletedAt IS NULL')
+                .orderBy('post.scheduledAt', 'ASC')
+                .take(args.limit ?? 50)
+                .getMany();
+        },
+        update: async (args: { where: { id: string }; data: Partial<ApiSocialPostEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialPostEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) throw new Error(`SocialPost ${args.where.id} not found`);
+            repo.merge(existing, args.data);
+            return repo.save(existing);
+        },
+        softDelete: async (args: { where: { id: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialPostEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) return null;
+            existing.deletedAt = new Date();
+            existing.status = SocialPostStatus.CANCELLED;
+            return repo.save(existing);
+        },
+    },
+    socialPostMedia: {
+        create: async (args: { data: Partial<ApiSocialPostMediaEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialPostMediaEntity);
+            return repo.save(repo.create(args.data));
+        },
+        findUnique: async (args: { where: { id: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiSocialPostMediaEntity).findOne({
+                where: { id: args.where.id },
+            });
+        },
+        findManyByPost: async (args: { postId: string }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiSocialPostMediaEntity).find({
+                where: { postId: args.postId, deletedAt: IsNull() },
+                order: { position: 'ASC', createdAt: 'ASC' },
+            });
+        },
+        softDelete: async (args: { where: { id: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiSocialPostMediaEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) return null;
+            existing.deletedAt = new Date();
+            return repo.save(existing);
+        },
+    },
+    aiGeneration: {
+        create: async (args: { data: Partial<ApiAiGenerationEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiAiGenerationEntity);
+            return repo.save(repo.create(args.data));
+        },
+        findManyByPost: async (args: { postId: string }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiAiGenerationEntity).find({
+                where: { postId: args.postId, deletedAt: IsNull() },
+                order: { createdAt: 'DESC' },
+            });
+        },
+        findManyByBusiness: async (args: { businessId: string; take?: number }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiAiGenerationEntity).find({
+                where: { businessId: args.businessId, deletedAt: IsNull() },
+                order: { createdAt: 'DESC' },
+                take: args.take ?? 50,
+            });
+        },
+    },
+    publishingLog: {
+        create: async (args: { data: Partial<ApiPublishingLogEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiPublishingLogEntity);
+            return repo.save(repo.create(args.data));
+        },
+        update: async (args: { where: { id: string }; data: Partial<ApiPublishingLogEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiPublishingLogEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) throw new Error(`PublishingLog ${args.where.id} not found`);
+            repo.merge(existing, args.data);
+            return repo.save(existing);
+        },
+        findManyByPost: async (args: { postId: string }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiPublishingLogEntity).find({
+                where: { postId: args.postId },
+                order: { createdAt: 'DESC' },
+            });
         },
     },
     googleBusinessConnection: {
@@ -241,6 +701,45 @@ const createApplicationClient = () => ({
             return repo.save(existing);
         },
     },
+    mcpApiKey: {
+        findMany: async (args: {
+            where?: { businessId?: string; revokedAt?: null };
+            orderBy?: { createdAt?: OrderDirection };
+        }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiMcpApiKeyEntity);
+            const where: Record<string, unknown> = {};
+            if (args.where?.businessId) where.businessId = args.where.businessId;
+            if ('revokedAt' in (args.where ?? {}) && args.where?.revokedAt === null) where.revokedAt = IsNull();
+            const order: Record<string, 'ASC' | 'DESC'> = {};
+            const createdOrder = resolveOrder(args.orderBy?.createdAt);
+            if (createdOrder) order.createdAt = createdOrder;
+            return repo.find({
+                where: Object.keys(where).length ? where : undefined,
+                order: Object.keys(order).length ? order : undefined,
+            });
+        },
+        findUnique: async (args: { where: { id?: string; keyHash?: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiMcpApiKeyEntity);
+            if (args.where.id) return repo.findOne({ where: { id: args.where.id } });
+            if (args.where.keyHash) return repo.findOne({ where: { keyHash: args.where.keyHash } });
+            return null;
+        },
+        create: async (args: { data: Partial<ApiMcpApiKeyEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiMcpApiKeyEntity);
+            return repo.save(repo.create(args.data));
+        },
+        update: async (args: { where: { id: string }; data: Partial<ApiMcpApiKeyEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            const repo = ds.getRepository(ApiMcpApiKeyEntity);
+            const existing = await repo.findOne({ where: { id: args.where.id } });
+            if (!existing) throw new Error(`McpApiKey ${args.where.id} not found`);
+            repo.merge(existing, args.data);
+            return repo.save(existing);
+        },
+    },
     $disconnect: async () => {
         const ds = getApplicationDataSource();
         if (ds.isInitialized) {
@@ -250,6 +749,47 @@ const createApplicationClient = () => ({
 });
 
 const createAdminClient = () => ({
+    adminUser: {
+        findUnique: async (args: { where: { id?: string; email?: string } }) => {
+            const ds = await ensureDataSourceInitialized(getAdminDataSource());
+            const repo = ds.getRepository(AdminUserEntity);
+            if (args.where.id) {
+                return repo.findOne({ where: { id: args.where.id } });
+            }
+            if (args.where.email) {
+                return repo.findOne({ where: { email: args.where.email } });
+            }
+            return null;
+        },
+        findMany: async () => {
+            const ds = await ensureDataSourceInitialized(getAdminDataSource());
+            return ds.getRepository(AdminUserEntity).find({ order: { createdAt: 'DESC' } });
+        },
+        create: async (args: { data: Partial<AdminUserEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getAdminDataSource());
+            return ds.getRepository(AdminUserEntity).save(ds.getRepository(AdminUserEntity).create(args.data));
+        },
+        count: async () => {
+            const ds = await ensureDataSourceInitialized(getAdminDataSource());
+            return ds.getRepository(AdminUserEntity).count();
+        },
+    },
+    auditLog: {
+        create: async (args: { data: Partial<AdminAuditLogEntity> }) => {
+            const ds = await ensureDataSourceInitialized(getAdminDataSource());
+            const repo = ds.getRepository(AdminAuditLogEntity);
+            return repo.save(repo.create(args.data));
+        },
+        findMany: async (args?: { orderBy?: { createdAt?: OrderDirection } }) => {
+            const ds = await ensureDataSourceInitialized(getAdminDataSource());
+            return ds.getRepository(AdminAuditLogEntity).find({
+                order: args?.orderBy?.createdAt
+                    ? { createdAt: resolveOrder(args.orderBy.createdAt) as 'ASC' | 'DESC' }
+                    : { createdAt: 'DESC' },
+                take: 100,
+            });
+        },
+    },
     template: {
         findMany: async (args?: {
             where?: { type?: string; name?: { in?: string[] } };
@@ -348,6 +888,12 @@ const createRunnerClient = () => ({
                 order: args?.orderBy?.createdAt
                     ? { createdAt: resolveOrder(args.orderBy.createdAt) as 'ASC' | 'DESC' }
                     : undefined,
+            });
+        },
+        count: async (args?: { where?: { status?: string } }) => {
+            const ds = await ensureDataSourceInitialized(getRunnerDataSource());
+            return ds.getRepository(RunnerAgentTaskEntity).count({
+                where: args?.where?.status ? { status: args.where.status as TaskStatus } : undefined,
             });
         },
     },

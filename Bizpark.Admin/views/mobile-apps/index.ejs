@@ -1,0 +1,78 @@
+<%- include('../partials/header') %>
+<%
+  const labelize = (value) => String(value || '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase());
+  const fmtDate = (d) => d ? new Date(d).toLocaleString() : '—';
+  const storeBadgeClass = (s) => {
+    const key = String(s || 'NONE').toLowerCase().replace(/_/g, '-');
+    return `store-badge store-badge--${key}`;
+  };
+%>
+
+<section class="management-hero">
+  <div>
+    <span class="eyebrow">Mobile App Store Publishing</span>
+    <h2>Review publish requests, set store links, and update review status.</h2>
+  </div>
+  <div class="management-hero-stats">
+    <span><strong><%= stats.total %></strong>Total</span>
+    <span><strong><%= stats.requested %></strong>Requested</span>
+    <span><strong><%= stats.inReview %></strong>In Review</span>
+    <span><strong><%= stats.published %></strong>Published</span>
+  </div>
+</section>
+
+<section class="mobile-apps-list">
+  <% if (!requests.length) { %>
+    <div class="mobile-apps-empty">
+      No store publishing requests yet.
+    </div>
+  <% } else { %>
+    <% requests.forEach((r) => { %>
+      <article class="mobile-app-card">
+        <div class="mobile-app-card-header">
+          <div>
+            <h3><%= r.businessName %></h3>
+            <p class="mobile-app-card-meta">
+              Requested: <%= fmtDate(r.storeRequestedAt) %> · Reviewed: <%= fmtDate(r.storeReviewedAt) %>
+            </p>
+          </div>
+          <span class="<%= storeBadgeClass(r.storeStatus) %>">
+            <%= labelize(r.storeStatus) %>
+          </span>
+        </div>
+
+        <form method="post" action="/admin/mobile-apps/<%= r.id %>/update" class="mobile-app-form">
+          <label>
+            Status
+            <select name="storeStatus">
+              <% statuses.forEach((st) => { %>
+                <option value="<%= st %>" <%= r.storeStatus === st ? 'selected' : '' %>><%= labelize(st) %></option>
+              <% }) %>
+            </select>
+          </label>
+
+          <label>
+            Admin note (shown to user)
+            <input type="text" name="storeNote" value="<%= r.storeNote || '' %>" placeholder="Review ETA or rejection reason">
+          </label>
+
+          <label>
+            Google Play URL
+            <input type="url" name="playStoreUrl" value="<%= r.playStoreUrl || '' %>" placeholder="https://play.google.com/store/apps/...">
+          </label>
+
+          <label>
+            App Store URL
+            <input type="url" name="appStoreUrl" value="<%= r.appStoreUrl || '' %>" placeholder="https://apps.apple.com/app/...">
+          </label>
+
+          <div class="mobile-app-form-actions">
+            <button type="submit" class="button button--primary">Save changes</button>
+          </div>
+        </form>
+      </article>
+    <% }) %>
+  <% } %>
+</section>
+
+<%- include('../partials/footer') %>

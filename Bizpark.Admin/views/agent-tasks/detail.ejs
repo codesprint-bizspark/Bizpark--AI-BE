@@ -1,0 +1,46 @@
+<%- include('../partials/header') %>
+
+<a class="detail-back" href="/admin/agent-tasks">&larr; Back to agent tasks</a>
+
+<header class="detail-header">
+  <div class="detail-header-main">
+    <span class="eyebrow">Agent task</span>
+    <h1><%= task.taskLabel %></h1>
+    <p class="muted">
+      Business: <strong><%= task.businessName %></strong>
+      <span class="detail-id">(<%= task.businessId %>)</span>
+    </p>
+    <div class="detail-meta">
+      <span class="task-status task-status--<%= task.status.toLowerCase().replace('_', '-') %>"><%= task.statusLabel %></span>
+      <span class="detail-id"><%= task.id %></span>
+    </div>
+  </div>
+  <div class="detail-actions">
+    <form method="post" action="/admin/agent-tasks/<%= task.id %>/approve">
+      <button type="submit" class="button button--primary">Approve</button>
+    </form>
+    <form method="post" action="/admin/agent-tasks/<%= task.id %>/reject">
+      <button type="submit" class="button danger">Reject</button>
+    </form>
+    <form method="post" action="/admin/agent-tasks/<%= task.id %>/retry">
+      <button type="submit" class="button button--ghost">Retry</button>
+    </form>
+  </div>
+</header>
+
+<div class="stack">
+  <section class="card detail-section">
+    <h2 class="detail-section-title">Input</h2>
+    <pre class="code-block"><%= JSON.stringify(task.inputData || {}, null, 2) %></pre>
+  </section>
+  <section class="card detail-section">
+    <h2 class="detail-section-title">Output</h2>
+    <pre class="code-block"><%= JSON.stringify(task.outputData || {}, null, 2) %></pre>
+  </section>
+  <section class="card detail-section">
+    <h2 class="detail-section-title">Logs</h2>
+    <pre class="code-block"><%= task.logs || 'No logs recorded for this task.' %></pre>
+  </section>
+</div>
+
+<%- include('../partials/footer') %>

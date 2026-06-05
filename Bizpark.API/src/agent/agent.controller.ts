@@ -1,6 +1,6 @@
 import { Controller, Post, Body, Get, Param, BadRequestException, NotFoundException, UseGuards } from '@nestjs/common';
 import { AgentService } from './agent.service';
-import { runnerDb, CreateAgentTaskDto } from 'bizpark.core';
+import { applicationDb, runnerDb, CreateAgentTaskDto, WebsiteStatus, MobileAppStatus } from 'bizpark.core';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
 
@@ -20,6 +20,7 @@ export class AgentController {
     }
 
     @Get('tasks')
+    @UseGuards(JwtAuthGuard)
     async getAllTasks(): Promise<any> {
         return runnerDb.agentTask.findMany({ orderBy: { createdAt: 'desc' } });
     }
@@ -42,20 +43,69 @@ export class AgentController {
         const commerceUrl = process.env.COMMERCE_URL || 'http://localhost:3003';
         const internalKey = process.env.INTERNAL_API_KEY || '';
 
-        // Mark completed immediately — Commerce sync is non-blocking
+        // Mark completed immediately — syncing is non-blocking
         await runnerDb.agentTask.update({
             where: { id: taskId },
             data: { status: 'COMPLETED', outputData: { approvedContent: content } },
         });
 
-        // Push generated config to Commerce in background
-        void fetch(`${commerceUrl}/api/commerce/website-config`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json', 'x-tenant-id': task.businessId, 'x-internal-key': internalKey },
-            body: JSON.stringify(content),
-        }).catch((e) => console.warn('[Approve] Commerce config sync failed:', e));
+        if (task.taskType === 'MOBILE_APP_GENERATION') {
+            // ── Mobile App approval path ──────────────────────────────────────
+            const mobileApp = await applicationDb.mobileApp.findFirstByBusinessId({ businessId: task.businessId });
+            if (mobileApp) {
+                await applicationDb.mobileApp.update({
+                    where: { id: mobileApp.id },
+                    data: {
+                        status: MobileAppStatus.PUBLISHED,
+                        cmsData: content,
+                        publishedAt: new Date(),
+                        suspendedAt: null,
+                    },
+                });
+            }
 
-        return { success: true, message: 'Website published successfully', adminCredentials: null };
+            // Push to Commerce so Bizpark.Mobile template can fetch it
+            const commerceUrl = process.env.COMMERCE_URL || 'http://localhost:3003';
+            const internalKey = process.env.INTERNAL_API_KEY || '';
+            void fetch(`${commerceUrl}/api/commerce/mobile-app-config`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'x-tenant-id': task.businessId, 'x-internal-key': internalKey },
+                body: JSON.stringify({
+                    businessName: content.businessName,
+                    tagline: content.tagline,
+                    primaryColor: content.primaryColor,
+                    accentColor: content.accentColor,
+                    backgroundColor: content.backgroundColor,
+                    isPublished: true,
+                    config: content,
+                }),
+            }).catch((e) => console.warn('[Approve] Mobile app Commerce sync failed:', e));
+        } else {
+            // ── Website approval path (existing) ─────────────────────────────
+            const website = await applicationDb.website.findFirstByBusinessId({ businessId: task.businessId });
+            if (website) {
+                await applicationDb.website.update({
+                    where: { id: website.id },
+                    data: {
+                        status: WebsiteStatus.PUBLISHED,
+                        cmsData: content,
+                        publishedAt: new Date(),
+                        suspendedAt: null,
+                    },
+                });
+            }
+
+            // Push generated config to Commerce in background
+            const commerceUrl = process.env.COMMERCE_URL || 'http://localhost:3003';
+            const internalKey = process.env.INTERNAL_API_KEY || '';
+            void fetch(`${commerceUrl}/api/commerce/website-config`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'x-tenant-id': task.businessId, 'x-internal-key': internalKey },
+                body: JSON.stringify(content),
+            }).catch((e) => console.warn('[Approve] Commerce config sync failed:', e));
+        }
+
+        return { success: true, message: 'Published successfully', adminCredentials: null };
     }
 
     @Post('tasks/:taskId/reject')
@@ -68,6 +118,24 @@ export class AgentController {
             where: { id: taskId },
             data: { status: 'FAILED', outputData: { reason: 'Rejected by user' } },
         });
+
+        if (task.taskType === 'MOBILE_APP_GENERATION') {
+            const mobileApp = await applicationDb.mobileApp.findFirstByBusinessId({ businessId: task.businessId });
+            if (mobileApp) {
+                await applicationDb.mobileApp.update({
+                    where: { id: mobileApp.id },
+                    data: { status: MobileAppStatus.FAILED },
+                });
+            }
+        } else {
+            const website = await applicationDb.website.findFirstByBusinessId({ businessId: task.businessId });
+            if (website) {
+                await applicationDb.website.update({
+                    where: { id: website.id },
+                    data: { status: WebsiteStatus.FAILED },
+                });
+            }
+        }
 
         return { success: true, message: 'Task rejected' };
     }

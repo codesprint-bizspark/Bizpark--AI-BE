@@ -116,7 +116,11 @@ export class GoogleBusinessService {
         },
       });
 
-      if (!saved.googleReply && !saved.agentTaskId && saved.status === 'SYNCED') {
+      const needsAiReply = !saved.googleReply && (
+        saved.status === 'SYNCED' ||
+        saved.status === 'FAILED'
+      );
+      if (needsAiReply) {
         const task = await this.agentService.queueTask({
           businessId,
           taskType: TaskType.GOOGLE_REVIEW_REPLY,

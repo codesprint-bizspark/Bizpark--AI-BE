@@ -1,0 +1,115 @@
+<%- include('../partials/header') %>
+<%
+  const labelize = (value) => String(value || '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (l) => l.toUpperCase());
+  const planClass = (tier) => `badge badge--plan badge--plan-${String(tier || 'promotional').toLowerCase()}`;
+  const statusClass = (status) => `badge badge--status badge--status-${String(status || 'pending').toLowerCase()}`;
+%>
+
+<a class="detail-back" href="/admin/businesses">&larr; Back to businesses</a>
+
+<header class="detail-header">
+  <div class="detail-header-main">
+    <span class="eyebrow">Business</span>
+    <h1><%= business.name %></h1>
+    <p class="muted"><%= business.description || 'No description provided.' %></p>
+    <div class="detail-meta">
+      <span class="<%= statusClass(business.status) %>"><%= labelize(business.status) %></span>
+      <span class="<%= planClass(business.subscriptionTier) %>"><%= labelize(business.subscriptionTier) %></span>
+      <% if (business.category) { %>
+        <span class="badge"><%= business.category %></span>
+      <% } %>
+    </div>
+  </div>
+</header>
+
+<div class="detail-grid">
+  <section class="card detail-section">
+    <h2 class="detail-section-title">Overview</h2>
+    <dl class="info-list">
+      <div class="info-row">
+        <dt>Business ID</dt>
+        <dd class="detail-id"><%= business.id %></dd>
+      </div>
+      <div class="info-row">
+        <dt>Category</dt>
+        <dd><%= business.category || '—' %></dd>
+      </div>
+      <div class="info-row">
+        <dt>Created</dt>
+        <dd><%= business.createdAt ? business.createdAt.toISOString().slice(0, 10) : '—' %></dd>
+      </div>
+    </dl>
+  </section>
+
+  <section class="card detail-section control-panel">
+    <h2 class="detail-section-title">Controls</h2>
+    <form method="post" action="/admin/businesses/<%= business.id %>/status">
+      <label>
+        Status
+        <select name="status">
+          <% businessStatuses.forEach((status) => { %>
+            <option value="<%= status %>" <%= business.status === status ? 'selected' : '' %>><%= labelize(status) %></option>
+          <% }) %>
+        </select>
+      </label>
+      <button type="submit" class="button button--primary">Update status</button>
+    </form>
+    <form method="post" action="/admin/businesses/<%= business.id %>/subscription">
+      <label>
+        Tier
+        <select name="tier">
+          <% subscriptionTiers.forEach((tier) => { %>
+            <option value="<%= tier %>" <%= business.subscriptionTier === tier ? 'selected' : '' %>><%= labelize(tier) %></option>
+          <% }) %>
+        </select>
+      </label>
+      <label>
+        Subscription status
+        <select name="status">
+          <% subscriptionStatuses.forEach((status) => { %>
+            <option value="<%= status %>"><%= labelize(status) %></option>
+          <% }) %>
+        </select>
+      </label>
+      <label>
+        Expires
+        <input type="date" name="expiresAt">
+      </label>
+      <button type="submit" class="button">Update subscription</button>
+    </form>
+  </section>
+
+  <section class="card detail-section">
+    <h2 class="detail-section-title">Users (<%= business.users?.length || 0 %>)</h2>
+    <% if (business.users?.length) { %>
+      <ul class="relation-list">
+        <% business.users.forEach((businessUser) => { %>
+          <li class="relation-item">
+            <a href="/admin/users/<%= businessUser.userId %>"><%= businessUser.user?.email || businessUser.userId %></a>
+            <span class="badge"><%= businessUser.role %></span>
+          </li>
+        <% }) %>
+      </ul>
+    <% } else { %>
+      <p class="muted">No users linked to this business.</p>
+    <% } %>
+  </section>
+
+  <section class="card detail-section">
+    <h2 class="detail-section-title">Websites (<%= business.websites?.length || 0 %>)</h2>
+    <% if (business.websites?.length) { %>
+      <ul class="relation-list">
+        <% business.websites.forEach((website) => { %>
+          <li class="relation-item">
+            <a href="/admin/websites/<%= website.id %>"><%= website.domain || website.id %></a>
+            <span class="badge badge--website badge--website-<%= String(website.status || 'draft').toLowerCase() %>"><%= labelize(website.status) %></span>
+          </li>
+        <% }) %>
+      </ul>
+    <% } else { %>
+      <p class="muted">No websites for this business yet.</p>
+    <% } %>
+  </section>
+</div>
+
+<%- include('../partials/footer') %>

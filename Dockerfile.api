@@ -1,0 +1,41 @@
+FROM node:20-alpine AS builder
+
+WORKDIR /app
+
+RUN apk add --no-cache python3 make g++
+
+COPY Bizpark.Core/package*.json ./Bizpark.Core/
+COPY Bizpark.API/package*.json ./Bizpark.API/
+
+WORKDIR /app/Bizpark.Core
+RUN npm ci
+COPY Bizpark.Core ./
+RUN npm run build
+
+WORKDIR /app/Bizpark.API
+RUN npm ci
+COPY Bizpark.API ./
+RUN npm run build
+RUN npm prune --omit=dev
+
+WORKDIR /app/Bizpark.Core
+RUN npm prune --omit=dev
+
+FROM node:20-alpine AS runtime
+
+ENV NODE_ENV=production
+ENV PORT=3000
+
+WORKDIR /app
+
+COPY --from=builder /app/Bizpark.Core/package*.json ./Bizpark.Core/
+COPY --from=builder /app/Bizpark.Core/dist ./Bizpark.Core/dist
+COPY --from=builder /app/Bizpark.Core/node_modules ./Bizpark.Core/node_modules
+COPY --from=builder /app/Bizpark.API/package*.json ./Bizpark.API/
+COPY --from=builder /app/Bizpark.API/dist ./Bizpark.API/dist
+COPY --from=builder /app/Bizpark.API/node_modules ./Bizpark.API/node_modules
+
+WORKDIR /app/Bizpark.API
+
+EXPOSE 3000
+CMD ["npm", "run", "start:prod"]

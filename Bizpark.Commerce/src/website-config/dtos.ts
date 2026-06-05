@@ -1,4 +1,4 @@
-import { IsObject, IsOptional, IsString } from 'class-validator';
+import { IsBoolean, IsObject, IsOptional, IsString } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateWebsiteConfigDto {
@@ -33,6 +33,10 @@ export class UpdateWebsiteConfigDto {
   @ApiPropertyOptional({ example: 'en-US' })
   @IsOptional() @IsString()
   locale?: string;
+
+  @ApiPropertyOptional({ example: true })
+  @IsOptional() @IsBoolean()
+  isPublished?: boolean;
 
   @ApiPropertyOptional({
     description: 'Nested content: announcement, hero, about, footer, seo',

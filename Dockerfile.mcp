@@ -1,0 +1,27 @@
+# ── Build stage ───────────────────────────────────────────────────────────────
+FROM golang:1.23-alpine AS builder
+
+WORKDIR /src/Bizpark.MCP
+
+# Cache deps first
+COPY Bizpark.MCP/go.mod Bizpark.MCP/go.sum ./
+RUN go mod download
+
+# Build
+COPY Bizpark.MCP/ ./
+RUN CGO_ENABLED=0 GOOS=linux go build -o /out/bizspark-mcp .
+
+# ── Runtime stage ───────────────────────────────────────────────────────────────
+FROM alpine:3.20 AS runtime
+
+RUN apk add --no-cache ca-certificates
+
+WORKDIR /app
+COPY --from=builder /out/bizspark-mcp ./bizspark-mcp
+
+# COMMERCE_DATABASE_URL is injected from the k8s secret (envFrom).
+# MCP_PORT defaults to 3005 for the cluster; override via env if needed.
+ENV MCP_PORT=3005
+EXPOSE 3005
+
+CMD ["./bizspark-mcp"]

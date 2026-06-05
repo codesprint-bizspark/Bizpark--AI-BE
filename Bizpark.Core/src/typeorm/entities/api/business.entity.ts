@@ -1,7 +1,9 @@
 import { Column, Entity, OneToMany } from 'typeorm';
-import { BaseEntityWithTimestamps, SubscriptionTier } from '../shared';
+import { BaseEntityWithTimestamps, BusinessStatus, SubscriptionTier } from '../shared';
 import { ApiBusinessUserEntity } from './business-user.entity';
+import { ApiSubscriptionEntity } from './subscription.entity';
 import { ApiWebsiteEntity } from './website.entity';
+import { ApiMobileAppEntity } from './mobile-app.entity';
 
 @Entity({ name: 'businesses' })
 export class ApiBusinessEntity extends BaseEntityWithTimestamps {
@@ -25,9 +27,23 @@ export class ApiBusinessEntity extends BaseEntityWithTimestamps {
     })
     subscriptionTier!: SubscriptionTier;
 
+    @Column({
+        type: 'enum',
+        enum: BusinessStatus,
+        enumName: 'BusinessStatus',
+        default: BusinessStatus.ACTIVE,
+    })
+    status!: BusinessStatus;
+
     @OneToMany(() => ApiBusinessUserEntity, (businessUser) => businessUser.business)
     users!: ApiBusinessUserEntity[];
 
     @OneToMany(() => ApiWebsiteEntity, (website) => website.business)
     websites!: ApiWebsiteEntity[];
+
+    @OneToMany(() => ApiMobileAppEntity, (mobileApp) => mobileApp.business)
+    mobileApps!: ApiMobileAppEntity[];
+
+    @OneToMany(() => ApiSubscriptionEntity, (subscription) => subscription.business)
+    subscriptions!: ApiSubscriptionEntity[];
 }

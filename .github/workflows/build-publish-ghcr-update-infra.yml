@@ -1,0 +1,260 @@
+name: Build GHCR Images and Update Infra
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: ghcr-gitops-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_OWNER: codesprint-bizspark
+  INFRA_REPO: codesprint-bizspark/Infra
+  INFRA_BRANCH: main
+  INFRA_OVERLAY_PATH: apps/bizpark/overlays/prod
+
+jobs:
+  detect-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      api: ${{ steps.filter.outputs.api }}
+      admin: ${{ steps.filter.outputs.admin }}
+      commerce: ${{ steps.filter.outputs.commerce }}
+      commerce_web: ${{ steps.filter.outputs.commerce_web }}
+      runner: ${{ steps.filter.outputs.runner }}
+      mcp: ${{ steps.filter.outputs.mcp }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            api:
+              - 'Bizpark.API/**'
+              - 'Dockerfile.api'
+              - 'Bizpark.Core/**'
+            admin:
+              - 'Bizpark.Admin/**'
+              - 'Dockerfile.admin'
+              - 'Bizpark.Core/**'
+            commerce:
+              - 'Bizpark.Commerce/**'
+              - 'Dockerfile.commerce'
+              - 'Bizpark.Core/**'
+            commerce_web:
+              - 'Bizpark.Commerce.Web/**'
+              - 'Dockerfile.commerce-web'
+            runner:
+              - 'Bizpark.Runner.Py/**'
+              - 'Dockerfile.runner'
+            mcp:
+              - 'Bizpark.MCP/**'
+              - 'Dockerfile.mcp'
+
+  build-and-push:
+    name: Build and push ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - service: api
+            image: bizpark-api
+            dockerfile: Dockerfile.api
+          - service: admin
+            image: bizpark-admin
+            dockerfile: Dockerfile.admin
+          - service: commerce
+            image: bizpark-commerce
+            dockerfile: Dockerfile.commerce
+          - service: commerce-web
+            image: bizpark-commerce-web
+            dockerfile: Dockerfile.commerce-web
+          - service: runner
+            image: bizpark-runner
+            dockerfile: Dockerfile.runner
+          - service: mcp
+            image: bizpark-mcp
+            dockerfile: Dockerfile.mcp
+
+    steps:
+      - name: Checkout BE
+        uses: actions/checkout@v4
+
+      - name: Set image variables
+        id: image
+        run: |
+          echo "name=${REGISTRY}/${IMAGE_OWNER}/${{ matrix.image }}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get existing digest
+        id: existing
+        run: |
+          DIGEST=$(docker buildx imagetools inspect ${{ steps.image.outputs.name }}:latest \
+            --format '{{json .Manifest}}' 2>/dev/null \
+            | python3 -c "import json,sys; d=sys.stdin.read().strip(); print(json.loads(d).get('digest','') if d else '')" \
+            2>/dev/null || echo "")
+          echo "digest=${DIGEST}" >> "$GITHUB_OUTPUT"
+
+      - name: Determine if build needed
+        id: should_build
+        run: |
+          case "${{ matrix.service }}" in
+            api)          CHANGED="${{ needs.detect-changes.outputs.api }}" ;;
+            admin)        CHANGED="${{ needs.detect-changes.outputs.admin }}" ;;
+            commerce)     CHANGED="${{ needs.detect-changes.outputs.commerce }}" ;;
+            commerce-web) CHANGED="${{ needs.detect-changes.outputs.commerce_web }}" ;;
+            runner)       CHANGED="${{ needs.detect-changes.outputs.runner }}" ;;
+            mcp)          CHANGED="${{ needs.detect-changes.outputs.mcp }}" ;;
+          esac
+
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] || \
+             [[ "${CHANGED}" == "true" ]] || \
+             [[ -z "${{ steps.existing.outputs.digest }}" ]]; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "Skipping build — no changes in ${{ matrix.service }}, reusing ${{ steps.existing.outputs.digest }}"
+          fi
+
+      - name: Build and push image
+        id: build
+        if: steps.should_build.outputs.build == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ${{ matrix.dockerfile }}
+          push: true
+          build-args: |
+            NEXT_PUBLIC_COMMERCE_URL=${{ vars.NEXT_PUBLIC_COMMERCE_URL || 'https://commerce.randitha.net' }}
+            NEXT_PUBLIC_BASE_DOMAIN=${{ vars.NEXT_PUBLIC_BASE_DOMAIN || 'randitha.net' }}
+          tags: |
+            ${{ steps.image.outputs.name }}:latest
+            ${{ steps.image.outputs.name }}:sha-${{ github.sha }}
+            ${{ steps.image.outputs.name }}:main-${{ steps.image.outputs.short_sha }}
+          labels: |
+            org.opencontainers.image.source=${{ github.server_url }}/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+
+      - name: Store image digest
+        run: |
+          mkdir -p image-digests
+          if [[ "${{ steps.should_build.outputs.build }}" == "true" ]]; then
+            DIGEST="${{ steps.build.outputs.digest }}"
+          else
+            DIGEST="${{ steps.existing.outputs.digest }}"
+          fi
+          echo "${{ matrix.service }}=${DIGEST}" > "image-digests/${{ matrix.service }}.env"
+
+      - name: Upload image digest
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-digest-${{ matrix.service }}
+          path: image-digests/${{ matrix.service }}.env
+          if-no-files-found: error
+
+  update-infra:
+    name: Update Infra image digests
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps:
+      - name: Checkout Infra
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.INFRA_REPO }}
+          ref: ${{ env.INFRA_BRANCH }}
+          token: ${{ secrets.INFRA_REPO_TOKEN }}
+          path: infra
+
+      - name: Download image digests
+        uses: actions/download-artifact@v4
+        with:
+          pattern: image-digest-*
+          merge-multiple: true
+          path: image-digests
+
+      - name: Update prod Kustomize images
+        run: |
+          python3 <<'PY'
+          import os
+          from pathlib import Path
+
+          digest_dir = Path("image-digests")
+          digests = {}
+          for env_file in digest_dir.glob("*.env"):
+              key, value = env_file.read_text().strip().split("=", 1)
+              digests[key] = value
+
+          services = [
+              ("api", "ghcr.io/codesprint-bizspark/bizpark-api"),
+              ("admin", "ghcr.io/codesprint-bizspark/bizpark-admin"),
+              ("commerce", "ghcr.io/codesprint-bizspark/bizpark-commerce"),
+              ("commerce-web", "ghcr.io/codesprint-bizspark/bizpark-commerce-web"),
+              ("runner", "ghcr.io/codesprint-bizspark/bizpark-runner"),
+              ("mcp", "ghcr.io/codesprint-bizspark/bizpark-mcp"),
+          ]
+
+          missing = [service for service, _ in services if service not in digests]
+          if missing:
+              raise SystemExit(f"Missing image digests for: {', '.join(missing)}")
+
+          overlay = Path("infra") / os.environ["INFRA_OVERLAY_PATH"] / "kustomization.yaml"
+          overlay.parent.mkdir(parents=True, exist_ok=True)
+          image_lines = []
+          for service, image in services:
+              image_lines.extend([
+                  f"  - name: {image}",
+                  f"    newName: {image}",
+                  f"    digest: {digests[service]}",
+              ])
+
+          overlay.write_text(
+              "apiVersion: kustomize.config.k8s.io/v1beta1\n"
+              "kind: Kustomization\n"
+              "namespace: bizpark\n"
+              "resources:\n"
+              "  - ../../base\n"
+              "images:\n"
+              + "\n".join(image_lines)
+              + "\nlabels:\n"
+              "  - pairs:\n"
+              "      app.kubernetes.io/part-of: bizpark\n"
+              "    includeSelectors: true\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Commit Infra update
+        working-directory: infra
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          if git diff --quiet; then
+            echo "Infra image digests are already up to date."
+            exit 0
+          fi
+
+          git add "${INFRA_OVERLAY_PATH}/kustomization.yaml"
+          git commit -m "chore: update bizpark images for ${GITHUB_SHA::7}"
+          git push origin "${INFRA_BRANCH}"

@@ -1,0 +1,274 @@
+<%- include('../partials/header') %>
+<%
+  const labelize = (value) => String(value || '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (letter) => letter.toUpperCase());
+  const queryFor = (overrides = {}) => {
+    const params = new URLSearchParams();
+    Object.entries({ ...filters, ...overrides }).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') params.set(key, value);
+    });
+    return params.toString();
+  };
+  const statusClass = (status) => `badge badge--website badge--website-${String(status || 'draft').toLowerCase()}`;
+  const previewUrl = (website) => {
+    const url = website.vercelUrl || website.domain || '';
+    if (!url) return '';
+    return /^https?:\/\//.test(url) ? url : `https://${url}`;
+  };
+  const showingStart = pagination.total ? ((pagination.page - 1) * pagination.pageSize) + 1 : 0;
+  const showingEnd = Math.min(pagination.page * pagination.pageSize, pagination.total);
+  const pageEnd = Math.min(pagination.totalPages, Math.max(1, pagination.page - 2) + 4);
+  const pageStart = Math.max(1, pageEnd - 4);
+  const pageNumbers = Array.from({ length: pageEnd - pageStart + 1 }, (_, index) => pageStart + index);
+%>
+
+<section class="management-hero" aria-label="Website management overview">
+  <div>
+    <span class="eyebrow">Website Management</span>
+    <h2>Manage generated websites, publishing, previews, and deployments</h2>
+  </div>
+  <div class="management-hero-stats">
+    <span><strong><%= stats.total %></strong>Total</span>
+    <span><strong><%= stats.published %></strong>Published</span>
+    <span><strong><%= stats.draft %></strong>Draft</span>
+    <span><strong><%= stats.generating %></strong>Generating</span>
+  </div>
+  <button class="button button--primary" type="button" data-open-dialog="create-website-dialog">Create Website</button>
+</section>
+
+<section class="compact-stat-grid">
+  <article class="compact-stat-card">
+    <span>Total Websites</span>
+    <strong><%= stats.total %></strong>
+  </article>
+  <article class="compact-stat-card compact-stat-card--success">
+    <span>Published</span>
+    <strong><%= stats.published %></strong>
+  </article>
+  <article class="compact-stat-card compact-stat-card--warning">
+    <span>Draft</span>
+    <strong><%= stats.draft %></strong>
+  </article>
+  <article class="compact-stat-card">
+    <span>Generating</span>
+    <strong><%= stats.generating %></strong>
+  </article>
+</section>
+
+<section class="management-panel">
+  <form class="management-filters website-filters" method="get" action="/admin/websites">
+    <label>
+      Website
+      <input type="search" name="search" value="<%= filters.search %>" placeholder="Website name or URL">
+    </label>
+    <label>
+      Business
+      <input type="search" name="business" value="<%= filters.business %>" placeholder="Business name">
+    </label>
+    <label>
+      Status
+      <select name="status">
+        <option value="">All statuses</option>
+        <% statuses.forEach((status) => { %>
+          <option value="<%= status %>" <%= filters.status === status ? 'selected' : '' %>><%= labelize(status) %></option>
+        <% }) %>
+      </select>
+    </label>
+    <label>
+      Template
+      <select name="template">
+        <option value="">All templates</option>
+        <% templates.forEach((template) => { %>
+          <option value="<%= template %>" <%= filters.template === template ? 'selected' : '' %>><%= template %></option>
+        <% }) %>
+      </select>
+    </label>
+    <label>
+      Publish State
+      <select name="publishState">
+        <option value="">Any state</option>
+        <option value="published" <%= filters.publishState === 'published' ? 'selected' : '' %>>Published</option>
+        <option value="unpublished" <%= filters.publishState === 'unpublished' ? 'selected' : '' %>>Unpublished</option>
+        <option value="not_published" <%= filters.publishState === 'not_published' ? 'selected' : '' %>>Not published</option>
+      </select>
+    </label>
+    <label>
+      Sort
+      <select name="sort">
+        <option value="newest" <%= filters.sort === 'newest' ? 'selected' : '' %>>Newest first</option>
+        <option value="updated" <%= filters.sort === 'updated' ? 'selected' : '' %>>Last updated</option>
+        <option value="oldest" <%= filters.sort === 'oldest' ? 'selected' : '' %>>Oldest first</option>
+        <option value="name" <%= filters.sort === 'name' ? 'selected' : '' %>>Website name</option>
+        <option value="business" <%= filters.sort === 'business' ? 'selected' : '' %>>Business name</option>
+        <option value="status" <%= filters.sort === 'status' ? 'selected' : '' %>>Status</option>
+      </select>
+    </label>
+    <input type="hidden" name="businessId" value="<%= filters.businessId %>">
+    <input type="hidden" name="pageSize" value="<%= filters.pageSize %>">
+    <div class="filter-actions">
+      <button class="button button--primary" type="submit">Apply</button>
+      <a class="button button--ghost" href="/admin/websites">Clear Filters</a>
+    </div>
+  </form>
+
+  <div class="bulk-toolbar">
+    <div>
+      <strong><%= pagination.total %></strong>
+      <span>websites found</span>
+    </div>
+  </div>
+
+  <div class="management-table-wrap">
+    <table class="table management-table website-table">
+      <thead>
+        <tr>
+          <th>Website Name</th>
+          <th>Business</th>
+          <th>Template</th>
+          <th>Status</th>
+          <th>Last Updated</th>
+          <th>Published Date</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <% if (websites.length) { %>
+          <% websites.forEach((website) => { %>
+            <% const url = previewUrl(website); %>
+            <tr>
+              <td>
+                <a class="entity-title" href="/admin/websites/<%= website.id %>"><%= website.displayName %></a>
+                <small class="secondary-text"><%= website.displayUrl %></small>
+              </td>
+              <td>
+                <a class="entity-title" href="/admin/businesses/<%= website.businessId %>"><%= website.business?.name || 'Unknown Business' %></a>
+                <small class="secondary-text"><%= website.business?.category || 'No category' %></small>
+              </td>
+              <td><span class="badge badge--template"><%= website.templateId || 'Default' %></span></td>
+              <td><span class="<%= statusClass(website.status) %>"><%= labelize(website.status) %></span></td>
+              <td><%= website.updatedAt.toISOString().slice(0, 16).replace('T', ' ') %></td>
+              <td><%= website.publishedAt ? website.publishedAt.toISOString().slice(0, 10) : '-' %></td>
+              <td>
+                <details class="row-actions">
+                  <summary>Actions</summary>
+                  <div>
+                    <a href="/admin/websites/<%= website.id %>">View Website</a>
+                    <% if (url) { %>
+                      <a href="<%= url %>" target="_blank" rel="noopener">Preview Website</a>
+                    <% } %>
+                    <button type="submit" form="redeploy-<%= website.id %>">Regenerate Website</button>
+                    <% if (website.status === 'PUBLISHED') { %>
+                      <button type="submit" form="unpublish-<%= website.id %>">Unpublish Website</button>
+                    <% } else { %>
+                      <button type="submit" form="publish-<%= website.id %>">Publish Website</button>
+                    <% } %>
+                    <a href="/admin/websites/<%= website.id %>">Edit Settings</a>
+                    <button class="danger-text" type="submit" form="delete-<%= website.id %>">Delete Website</button>
+                  </div>
+                </details>
+              </td>
+            </tr>
+          <% }) %>
+        <% } else { %>
+          <tr>
+            <td colspan="7">
+              <div class="empty-state">
+                <strong>No websites found</strong>
+                <p>Try changing the search or filters, or create a new website.</p>
+              </div>
+            </td>
+          </tr>
+        <% } %>
+      </tbody>
+    </table>
+  </div>
+
+  <% websites.forEach((website) => { %>
+    <form id="publish-<%= website.id %>" method="post" action="/admin/websites/<%= website.id %>/publish"></form>
+    <form id="unpublish-<%= website.id %>" method="post" action="/admin/websites/<%= website.id %>/unpublish"></form>
+    <form id="redeploy-<%= website.id %>" method="post" action="/admin/websites/<%= website.id %>/redeploy"></form>
+    <form id="delete-<%= website.id %>" method="post" action="/admin/websites/<%= website.id %>/delete"></form>
+  <% }) %>
+
+  <div class="pagination-bar">
+    <p class="pagination-summary">Showing <strong><%= showingStart %>&ndash;<%= showingEnd %></strong> of <strong><%= pagination.total %></strong> results</p>
+    <form class="pagination-size" method="get" action="/admin/websites">
+      <input type="hidden" name="search" value="<%= filters.search %>">
+      <input type="hidden" name="business" value="<%= filters.business %>">
+      <input type="hidden" name="status" value="<%= filters.status %>">
+      <input type="hidden" name="template" value="<%= filters.template %>">
+      <input type="hidden" name="publishState" value="<%= filters.publishState %>">
+      <input type="hidden" name="sort" value="<%= filters.sort %>">
+      <input type="hidden" name="businessId" value="<%= filters.businessId %>">
+      <label>
+        Rows per page
+        <select name="pageSize" onchange="this.form.submit()">
+          <% [10, 25, 50].forEach((size) => { %>
+            <option value="<%= size %>" <%= Number(filters.pageSize) === size ? 'selected' : '' %>><%= size %></option>
+          <% }) %>
+        </select>
+      </label>
+    </form>
+    <div class="pagination-actions">
+      <a class="pagination-button <%= pagination.hasPrevious ? '' : 'is-disabled' %>" href="/admin/websites?<%= queryFor({ page: pagination.page - 1 }) %>">Previous</a>
+      <% pageNumbers.forEach((pageNumber) => { %>
+        <a class="pagination-page <%= pageNumber === pagination.page ? 'is-current' : '' %>" href="/admin/websites?<%= queryFor({ page: pageNumber }) %>"><%= pageNumber %></a>
+      <% }) %>
+      <a class="pagination-button <%= pagination.hasNext ? '' : 'is-disabled' %>" href="/admin/websites?<%= queryFor({ page: pagination.page + 1 }) %>">Next</a>
+    </div>
+  </div>
+</section>
+
+<dialog class="admin-dialog" id="create-website-dialog">
+  <form method="post" action="/admin/websites" class="dialog-card">
+    <div class="dialog-header">
+      <div>
+        <p class="eyebrow">New Website</p>
+        <h2>Create Website</h2>
+      </div>
+      <button type="button" class="icon-button" data-close-dialog aria-label="Close">&times;</button>
+    </div>
+    <label>
+      Business
+      <select name="businessId" required>
+        <option value="">Select a business</option>
+        <% businesses.forEach((business) => { %>
+          <option value="<%= business.id %>"><%= business.name %></option>
+        <% }) %>
+      </select>
+    </label>
+    <div class="dialog-grid">
+      <label>
+        Domain / URL
+        <input name="domain" placeholder="sparkcoffee.bizspark.ai">
+      </label>
+      <label>
+        Template
+        <input name="templateId" placeholder="modern-cafe">
+      </label>
+    </div>
+    <label>
+      Status
+      <select name="status">
+        <option value="DRAFT">Draft</option>
+        <option value="GENERATING">Generating</option>
+        <option value="PUBLISHED">Published</option>
+      </select>
+    </label>
+    <div class="dialog-actions">
+      <button type="button" class="button button--ghost" data-close-dialog>Cancel</button>
+      <button type="submit" class="button button--primary">Create Website</button>
+    </div>
+  </form>
+</dialog>
+
+<script>
+  document.querySelectorAll('[data-open-dialog]').forEach((button) => {
+    button.addEventListener('click', () => document.getElementById(button.dataset.openDialog)?.showModal());
+  });
+
+  document.querySelectorAll('[data-close-dialog]').forEach((button) => {
+    button.addEventListener('click', () => button.closest('dialog')?.close());
+  });
+</script>
+
+<%- include('../partials/footer') %>

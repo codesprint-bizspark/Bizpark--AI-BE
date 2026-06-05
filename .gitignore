@@ -1,6 +1,61 @@
 node_modules/
 dist/
 .env
+.env.*
+!.env.example
 *.js.map
 *.d.ts
 *.tsbuildinfo
+
+# env files
+Bizpark.Commerce/env
+Bizpark.Commerce.Web/env.local
+Bizpark.Core/env
+
+# Environment files
+**/.env
+**/.env.*
+**/env
+**/env.*
+
+# Dependencies and build output
+**/node_modules
+**/dist
+**/build
+**/.next
+**/.turbo
+**/coverage
+**/coverage-data
+**/.nyc_output
+
+# Python local state
+**/__pycache__
+**/*.py[cod]
+**/.pytest_cache
+**/.venv
+**/venv
+
+# Logs and reports
+logs
+**/*.log
+**/npm-debug.log*
+**/pnpm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+**/test-report.html
+**/test-results.json
+
+# OS and editor files
+.DS_Store
+**/.DS_Store
+.idea
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# Temporary files
+**/.temp
+**/.tmp
+**/*.tmp

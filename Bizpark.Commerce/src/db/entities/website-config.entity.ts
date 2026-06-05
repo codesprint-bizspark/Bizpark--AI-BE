@@ -82,6 +82,9 @@ export class WebsiteConfigEntity {
   @Column({ type: 'varchar', length: 10, default: 'en' })
   locale!: string;
 
+  @Column({ type: 'boolean', default: true })
+  isPublished!: boolean;
+
   // ── Flexible Content (agent-driven) ───────────────────────────────
   // All page sections live here — agent calls PATCH with any subset
   @Column({ type: 'jsonb', nullable: true })

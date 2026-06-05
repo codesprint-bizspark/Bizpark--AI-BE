@@ -5,6 +5,62 @@ export const SubscriptionTier = {
 } as const;
 export type SubscriptionTier = (typeof SubscriptionTier)[keyof typeof SubscriptionTier];
 
+export const SubscriptionStatus = {
+    TRIALING: 'TRIALING',
+    ACTIVE: 'ACTIVE',
+    PAST_DUE: 'PAST_DUE',
+    CANCELLED: 'CANCELLED',
+    EXPIRED: 'EXPIRED',
+} as const;
+export type SubscriptionStatus = (typeof SubscriptionStatus)[keyof typeof SubscriptionStatus];
+
+export const BusinessStatus = {
+    ACTIVE: 'ACTIVE',
+    SUSPENDED: 'SUSPENDED',
+    ARCHIVED: 'ARCHIVED',
+} as const;
+export type BusinessStatus = (typeof BusinessStatus)[keyof typeof BusinessStatus];
+
+export const WebsiteStatus = {
+    DRAFT: 'DRAFT',
+    GENERATING: 'GENERATING',
+    PENDING_APPROVAL: 'PENDING_APPROVAL',
+    PUBLISHED: 'PUBLISHED',
+    UNPUBLISHED: 'UNPUBLISHED',
+    FAILED: 'FAILED',
+    SUSPENDED: 'SUSPENDED',
+} as const;
+export type WebsiteStatus = (typeof WebsiteStatus)[keyof typeof WebsiteStatus];
+
+export const MobileAppStatus = {
+    DRAFT: 'DRAFT',
+    GENERATING: 'GENERATING',
+    PENDING_APPROVAL: 'PENDING_APPROVAL',
+    PUBLISHED: 'PUBLISHED',
+    UNPUBLISHED: 'UNPUBLISHED',
+    FAILED: 'FAILED',
+    SUSPENDED: 'SUSPENDED',
+} as const;
+export type MobileAppStatus = (typeof MobileAppStatus)[keyof typeof MobileAppStatus];
+
+// App-store publishing lifecycle — separate from the config status above.
+// User requests → admin reviews (can take weeks) → admin publishes with store links.
+export const MobileAppStoreStatus = {
+    NONE: 'NONE',             // never requested
+    REQUESTED: 'REQUESTED',   // user submitted a publish request
+    IN_REVIEW: 'IN_REVIEW',   // admin is processing / store review in progress
+    PUBLISHED: 'PUBLISHED',   // live on store(s), links available
+    REJECTED: 'REJECTED',     // admin declined
+} as const;
+export type MobileAppStoreStatus = (typeof MobileAppStoreStatus)[keyof typeof MobileAppStoreStatus];
+
+export const AdminRole = {
+    SUPER_ADMIN: 'SUPER_ADMIN',
+    ADMIN: 'ADMIN',
+    SUPPORT: 'SUPPORT',
+} as const;
+export type AdminRole = (typeof AdminRole)[keyof typeof AdminRole];
+
 export const TemplateType = {
     SHOWCASE: 'SHOWCASE',
     ECOMMERCE_ITEM: 'ECOMMERCE_ITEM',
@@ -26,6 +82,8 @@ export const TaskType = {
     SOCIAL_MEDIA_CONTENT: 'SOCIAL_MEDIA_CONTENT',
     BLOG_POST_WRITING: 'BLOG_POST_WRITING',
     GOOGLE_REVIEW_REPLY: 'GOOGLE_REVIEW_REPLY',
+    SOCIAL_POST_PUBLISH: 'SOCIAL_POST_PUBLISH',
+    MOBILE_APP_GENERATION: 'MOBILE_APP_GENERATION',
 } as const;
 export type TaskType = (typeof TaskType)[keyof typeof TaskType];
 
@@ -36,3 +94,72 @@ export const UserRole = {
     VIEWER: 'VIEWER',
 } as const;
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
+
+// ────────────────────────────────────────────────────────────────────────────
+// Social Media Agent
+// ────────────────────────────────────────────────────────────────────────────
+
+export const SocialPlatform = {
+    FACEBOOK: 'FACEBOOK',
+    INSTAGRAM: 'INSTAGRAM',
+    TIKTOK: 'TIKTOK',
+} as const;
+export type SocialPlatform = (typeof SocialPlatform)[keyof typeof SocialPlatform];
+
+export const SocialAccountStatus = {
+    CONNECTED: 'CONNECTED',
+    EXPIRED: 'EXPIRED',
+    REVOKED: 'REVOKED',
+    DISCONNECTED: 'DISCONNECTED',
+} as const;
+export type SocialAccountStatus = (typeof SocialAccountStatus)[keyof typeof SocialAccountStatus];
+
+export const SocialPostStatus = {
+    DRAFT: 'DRAFT',
+    SCHEDULED: 'SCHEDULED',
+    PUBLISHING: 'PUBLISHING',
+    PUBLISHED: 'PUBLISHED',
+    FAILED: 'FAILED',
+    CANCELLED: 'CANCELLED',
+} as const;
+export type SocialPostStatus = (typeof SocialPostStatus)[keyof typeof SocialPostStatus];
+
+export const SocialPostType = {
+    TEXT: 'TEXT',
+    IMAGE: 'IMAGE',
+    FLYER: 'FLYER',
+    VIDEO: 'VIDEO',
+} as const;
+export type SocialPostType = (typeof SocialPostType)[keyof typeof SocialPostType];
+
+export const SocialMediaKind = {
+    IMAGE: 'IMAGE',
+    VIDEO: 'VIDEO',
+    THUMBNAIL: 'THUMBNAIL',
+} as const;
+export type SocialMediaKind = (typeof SocialMediaKind)[keyof typeof SocialMediaKind];
+
+export const SocialMediaSource = {
+    AI_GENERATED: 'AI_GENERATED',
+    USER_UPLOAD: 'USER_UPLOAD',
+    BUSINESS_ASSET: 'BUSINESS_ASSET',
+} as const;
+export type SocialMediaSource = (typeof SocialMediaSource)[keyof typeof SocialMediaSource];
+
+export const AiGenerationKind = {
+    CAPTION: 'CAPTION',
+    HASHTAGS: 'HASHTAGS',
+    IMAGE_PROMPT: 'IMAGE_PROMPT',
+    FLYER_PROMPT: 'FLYER_PROMPT',
+    VIDEO_SCRIPT: 'VIDEO_SCRIPT',
+    FULL_POST: 'FULL_POST',
+} as const;
+export type AiGenerationKind = (typeof AiGenerationKind)[keyof typeof AiGenerationKind];
+
+export const PublishingLogStatus = {
+    PENDING: 'PENDING',
+    SUCCESS: 'SUCCESS',
+    FAILED: 'FAILED',
+    RETRYING: 'RETRYING',
+} as const;
+export type PublishingLogStatus = (typeof PublishingLogStatus)[keyof typeof PublishingLogStatus];

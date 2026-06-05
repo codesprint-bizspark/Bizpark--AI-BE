@@ -42,6 +42,7 @@ export const updateWebsiteConfig = (token: string, payload: Partial<{
   faviconUrl: string | null;
   currency: string;
   locale: string;
+  isPublished: boolean;
   content: Partial<WebsiteConfigContent>;
 }>) =>
   req<{ success: boolean; data: WebsiteConfig }>('/api/commerce/website-config', {
@@ -82,15 +83,33 @@ export const getCategories = () =>
   req<{ success: boolean; data: Category[] }>('/api/commerce/catalog/categories');
 
 // ── Catalog — Admin ───────────────────────────────────────────────
-export const adminCreateProduct = (token: string, dto: { title: string; description?: string; price: number; currency?: string; categoryId?: string }) =>
+export const adminCreateProduct = (token: string, dto: { title: string; description?: string; price: number; currency?: string; categoryId?: string; imageUrl?: string | null }) =>
   req<{ success: boolean; data: Product }>('/api/commerce/catalog/products', {
     method: 'POST', body: JSON.stringify(dto),
   }, token);
 
-export const adminUpdateProduct = (token: string, id: string, dto: Partial<{ title: string; description: string | null; price: number; currency: string; categoryId: string | null }>) =>
+export const adminUpdateProduct = (token: string, id: string, dto: Partial<{ title: string; description: string | null; price: number; currency: string; categoryId: string | null; imageUrl: string | null }>) =>
   req<{ success: boolean; data: Product }>(`/api/commerce/catalog/products/${id}`, {
     method: 'PATCH', body: JSON.stringify(dto),
   }, token);
+
+/** Uploads a product image to Supabase Storage; returns the public URL. */
+export const adminUploadProductImage = async (token: string, file: File): Promise<string> => {
+  const form = new FormData();
+  form.append('file', file);
+  const headers: Record<string, string> = {
+    'x-tenant-id': getTenantId(),
+    Authorization: `Bearer ${token}`,
+  };
+  const res = await fetch(`${BASE}/api/commerce/catalog/products/media`, {
+    method: 'POST', headers, body: form,
+  });
+  const json = await res.json();
+  if (!res.ok) throw new Error(json?.message || `Upload failed: ${res.status}`);
+  const url = json?.data?.url;
+  if (!url) throw new Error('No URL returned from upload');
+  return url;
+};
 
 export const adminDeleteProduct = (token: string, id: string) =>
   req<{ success: boolean; data: Product }>(`/api/commerce/catalog/products/${id}`, {

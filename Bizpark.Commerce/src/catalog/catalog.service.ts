@@ -48,7 +48,7 @@ export class CatalogService {
 
   async createProduct(
     tenantId: string,
-    payload: { title: string; description?: string; price: number; currency?: string; categoryId?: string },
+    payload: { title: string; description?: string; price: number; currency?: string; categoryId?: string; imageUrl?: string | null },
   ) {
     const repo = await this.repo(tenantId);
     const product = repo.create({
@@ -57,6 +57,7 @@ export class CatalogService {
       price: payload.price,
       currency: payload.currency || 'USD',
       categoryId: payload.categoryId ?? null,
+      imageUrl: payload.imageUrl ?? null,
     });
     return repo.save(product);
   }
@@ -64,7 +65,7 @@ export class CatalogService {
   async updateProduct(
     tenantId: string,
     productId: string,
-    payload: { title?: string; description?: string; price?: number; currency?: string; categoryId?: string | null },
+    payload: { title?: string; description?: string; price?: number; currency?: string; categoryId?: string | null; imageUrl?: string | null },
   ) {
     const repo = await this.repo(tenantId);
     const product = await repo.findOne({ where: { id: productId, deletedAt: IsNull() } });
@@ -75,6 +76,7 @@ export class CatalogService {
     if (payload.price !== undefined) product.price = payload.price;
     if (payload.currency !== undefined) product.currency = payload.currency;
     if (payload.categoryId !== undefined) product.categoryId = payload.categoryId ?? null;
+    if (payload.imageUrl !== undefined) product.imageUrl = payload.imageUrl ?? null;
 
     return repo.save(product);
   }

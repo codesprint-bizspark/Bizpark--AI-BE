@@ -5,6 +5,7 @@ export { CommerceUserEntity } from './commerce-user.entity';
 export type { CommerceUserRole } from './commerce-user.entity';
 export { CustomerEntity } from './customer.entity';
 export { InventoryItemEntity } from './inventory-item.entity';
+export { MobileAppConfigEntity } from './mobile-app-config.entity';
 export { OrderEntity } from './order.entity';
 export type { OrderStatus } from './order.entity';
 export { OrderItemEntity } from './order-item.entity';
@@ -22,6 +23,7 @@ import { CategoryEntity } from './category.entity';
 import { CommerceUserEntity } from './commerce-user.entity';
 import { CustomerEntity } from './customer.entity';
 import { InventoryItemEntity } from './inventory-item.entity';
+import { MobileAppConfigEntity } from './mobile-app-config.entity';
 import { OrderEntity } from './order.entity';
 import { OrderItemEntity } from './order-item.entity';
 import { ProductEntity } from './product.entity';
@@ -44,4 +46,5 @@ export const COMMERCE_ENTITIES = [
   ShippingMethodEntity,
   SubscriptionEntity,
   WebsiteConfigEntity,
+  MobileAppConfigEntity,
 ];

@@ -56,6 +56,7 @@ export interface WebsiteConfig {
   faviconUrl: string | null;
   currency: string;
   locale: string;
+  isPublished: boolean;
   content: WebsiteConfigContent | null;
   updatedAt: string;
 }
@@ -69,6 +70,7 @@ export interface Product {
   price: number | string; // backend returns decimal as string; JS coercion handles math
   currency: string;
   categoryId: string | null;
+  imageUrl?: string | null;
   deletedAt: string | null;
   createdAt: string;
 }

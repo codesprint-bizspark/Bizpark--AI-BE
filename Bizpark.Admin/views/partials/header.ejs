@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title><%= title || 'Bizpark Admin' %></title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/admin.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"></span>
+      <span class="brand-text">
+        BizSpark AI
+        <small>Admin</small>
+      </span>
+    </div>
+    <%
+      const activePath = typeof currentPath !== 'undefined' ? currentPath : '';
+      const isActiveNav = (path) => path === '/admin'
+        ? activePath === '/admin'
+        : activePath === path || activePath.startsWith(`${path}/`);
+      const navItems = [
+        { path: '/admin', label: 'Dashboard' },
+        { path: '/admin/businesses', label: 'Businesses' },
+        { path: '/admin/websites', label: 'Websites' },
+        { path: '/admin/mobile-apps', label: 'Mobile Apps' },
+        { path: '/admin/agent-tasks', label: 'Agent Tasks' },
+        { path: '/admin/subscriptions', label: 'Subscriptions' },
+        { path: '/admin/users', label: 'Users' },
+      ];
+    %>
+    <nav class="nav" aria-label="Main">
+      <span class="nav-label">Menu</span>
+      <% navItems.forEach((item) => { %>
+        <a
+          class="<%= isActiveNav(item.path) ? 'is-active' : '' %>"
+          href="<%= item.path %>"
+          <%= isActiveNav(item.path) ? 'aria-current="page"' : '' %>
+        >
+          <span class="nav-icon" aria-hidden="true"></span>
+          <%= item.label %>
+        </a>
+      <% }) %>
+    </nav>
+    <div class="sidebar-account">
+      <% if (admin) { %>
+        <div class="sidebar-profile-card">
+          <span class="admin-avatar"><%= (admin.name || 'A').trim().charAt(0).toUpperCase() %></span>
+          <span class="admin-profile-copy">
+            <strong><%= admin.name %></strong>
+            <small><%= admin.role %></small>
+          </span>
+        </div>
+      <% } %>
+      <form class="logout" method="post" action="/admin/logout">
+        <button type="submit">Log out</button>
+      </form>
+    </div>
+  </aside>
+  <main class="main">
+    <header class="topbar">
+      <h1><%= title || 'Admin' %></h1>
+      <% if (typeof pageSubtitle !== 'undefined' && pageSubtitle) { %>
+        <p class="topbar-subtitle"><%= pageSubtitle %></p>
+      <% } %>
+    </header>

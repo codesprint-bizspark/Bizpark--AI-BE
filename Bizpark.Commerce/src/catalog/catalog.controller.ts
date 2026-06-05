@@ -1,17 +1,38 @@
-import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiQuery, ApiResponse, ApiSecurity } from '@nestjs/swagger';
+import { Body, Controller, Delete, Get, HttpCode, HttpStatus, Param, Patch, Post, Query, UploadedFile, UseGuards, UseInterceptors } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiQuery, ApiResponse, ApiSecurity, ApiConsumes } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { RolesGuard } from '../auth/roles.guard';
 import { Roles } from '../auth/roles.decorator';
 import { TenantId } from '../tenant/tenant.decorator';
 import { CatalogService } from './catalog.service';
+import { MediaStorageService } from './media-storage.service';
 import { CreateProductDto, UpdateProductDto } from './dtos';
 
 @ApiTags('Catalog — Products')
 @ApiSecurity('TenantId')
 @Controller('api/commerce/catalog')
 export class CatalogController {
-  constructor(private readonly catalogService: CatalogService) {}
+  constructor(
+    private readonly catalogService: CatalogService,
+    private readonly mediaStorage: MediaStorageService,
+  ) {}
+
+  @ApiOperation({ summary: 'Upload product image (Admin)', description: 'Uploads an image to Supabase Storage and returns its public URL. Pass the URL as imageUrl when creating/updating a product.' })
+  @ApiBearerAuth('JWT')
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({ status: 201, description: '{ url } of the uploaded image' })
+  @Post('products/media')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadProductImage(
+    @TenantId() tenantId: string,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    const url = await this.mediaStorage.uploadProductImage(tenantId, file);
+    return { success: true, data: { url } };
+  }
 
   @ApiOperation({ summary: 'List products', description: 'Public — browse with optional search, category filter, and pagination.' })
   @ApiQuery({ name: 'search', required: false, example: 'shirt' })

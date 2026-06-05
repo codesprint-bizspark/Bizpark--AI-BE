@@ -12,7 +12,7 @@ export const getApplicationDataSource = () => {
                 name: 'application',
                 urlEnvVar: 'APPLICATION_DATABASE_URL',
                 schemaEnvVar: 'APPLICATION_DB_SCHEMA',
-                defaultSchema: 'public',
+                defaultSchema: 'api',
                 entities: API_ENTITIES,
                 migrationsGlob: `${__dirname}/../migrations/application/*{.ts,.js}`,
             }),

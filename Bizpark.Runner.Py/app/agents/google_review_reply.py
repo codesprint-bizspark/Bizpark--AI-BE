@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 
@@ -82,11 +83,8 @@ Policy:
 
     response = await _llm.ainvoke(prompt)
     raw_text = response.content.strip()
-    if raw_text.startswith("```"):
-        raw_text = raw_text.split("```")[1]
-        if raw_text.startswith("json"):
-            raw_text = raw_text[4:]
-        raw_text = raw_text.strip()
+    raw_text = re.sub(r"^```(?:json)?\s*\n?", "", raw_text, flags=re.IGNORECASE)
+    raw_text = re.sub(r"\n?```\s*$", "", raw_text.strip()).strip()
 
     try:
         parsed = json.loads(raw_text)

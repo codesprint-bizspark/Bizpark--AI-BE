@@ -11,6 +11,7 @@ type ConfigPayload = Partial<{
   faviconUrl: string | null;
   currency: string;
   locale: string;
+  isPublished: boolean;
   content: Partial<WebsiteConfigContent>;
 }>;
 
@@ -40,6 +41,7 @@ export class WebsiteConfigService {
     if (payload.faviconUrl !== undefined) config.faviconUrl = payload.faviconUrl ?? null;
     if (payload.currency !== undefined) config.currency = payload.currency;
     if (payload.locale !== undefined) config.locale = payload.locale;
+    if (payload.isPublished !== undefined) config.isPublished = payload.isPublished;
 
     // Deep-merge content so agent can update one section without wiping others
     if (payload.content !== undefined) {

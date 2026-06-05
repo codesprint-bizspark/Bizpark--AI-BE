@@ -5,6 +5,8 @@ Run with:  python run.py
 import asyncio
 import logging
 import signal
+import sys
+
 
 from app.config import settings  # noqa: F401 — loads .env before anything else
 from app.worker.processor import start_worker
@@ -38,4 +40,6 @@ async def main():
 
 
 if __name__ == "__main__":
+    if sys.platform == "win32":
+        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
     asyncio.run(main())

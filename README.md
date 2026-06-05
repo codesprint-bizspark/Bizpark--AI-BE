@@ -26,20 +26,24 @@
 ## Ecommerce Architecture (Commerce + Frontend)
 
 ```
-                      FRONTEND
-┌─────────────────────────────────────────┐
-│           Bizpark.Frontend              │
-│         Next.js · Port 3004             │
-│  placeholder config · all store pages  │
-└──────────────────┬──────────────────────┘
-                   │ HTTP + x-tenant-id header
-                   ▼
-                  BACKEND
+                              CLIENTS
+┌────────────────────────────────┐   ┌────────────────────────────────┐
+│      Bizpark.Commerce.Web       │   │        Bizpark.Mobile           │
+│        Next.js · :3004          │   │     React Native + Expo         │
+│   tenant storefront (web)       │   │   per-tenant customer app       │
+│   ?tenant= / subdomain          │   │   config via /mobile-app-config │
+│                                 │   │   OTA updates via EAS           │
+└───────────────┬─────────────────┘   └────────────────┬───────────────┘
+                │ HTTP + x-tenant-id                    │ HTTPS + tenant id
+                └──────────────────┬────────────────────┘
+                                   ▼
+                                 BACKEND
 ┌─────────────────────────────────────────┐
 │           Bizpark.Commerce              │
 │           NestJS · Port 3003            │
 │  Auth · Catalog · Cart · Checkout       │
-│  Orders · Inventory · Payments · Config │
+│  Orders · Inventory · Payments          │
+│  + /website-config  + /mobile-app-config│
 └──────────────────┬──────────────────────┘
                    │
                   DATABASE
@@ -49,16 +53,30 @@
 │  ├── tenant_business_b  (isolated)      │
 │  └── tenant_...                         │
 └─────────────────────────────────────────┘
+        ▲ read-only (products, orders, customers)
+        │
+┌───────┴───────────┐      Claude Desktop / Claude.ai (web)
+│  Bizpark.MCP (Go) │◀──── MCP · OAuth / API key ─── 🤖 external AI client
+│   AI Connect :3005│
+└───────────────────┘
 ```
+
+> **AI Connect:** the MCP server is an *inbound* gateway — an external AI assistant (Claude) connects **in** to read a merchant's store data. It's distinct from the *outbound* External Integrations (where the platform calls out to OpenAI/Meta/Google). See [AI Connect (MCP)](#ai-connect-mcp--bizparkmcp).
+
+> **Bizpark.Mobile (React Native + Expo):** one app, **config-driven per tenant** — it fetches branding/products from `GET /mobile-app-config` (Commerce) using the business's tenant id, so the same binary serves every store. Distributed via **EAS** (`eas build` for the APK, `eas update` for OTA pushes — no rebuild). Customers reach it from the dashboard's **Mobile App** page: the QR encodes `https://<dashboard>/m?tenant=<id>`, and that public `/m` bounce page deep-links into the installed app (`bizpark://?tenant=<id>`) or falls back to the install link.
 
 | Package | Description | Port | Tech |
 |---|---|---|---|
 | **Bizpark.Core** | Shared library (entities, DTOs, DB config) | — | TypeScript |
-| **Bizpark.API** | REST API (auth, business, website, agents) | 3000 | NestJS |
-| **Bizpark.Runner.Py** | BullMQ worker (AI agent task processor) | 3001 | FastAPI |
-| **Bizpark.Admin** | Admin API (template management) | 3002 | NestJS |
+| **Bizpark.API** | REST API (auth, business, website, agents, **social**, **billing**) | 3000 | NestJS |
+| **Bizpark.Runner.Py** | BullMQ worker (AI agent task processor + AI image gen) | 3001 | FastAPI |
+| **Bizpark.Admin** | Admin API (template + mobile-app store-request management) | 3002 | NestJS |
 | **Bizpark.Commerce** | Multi-tenant ecommerce backend (per-business store) | 3003 | NestJS |
-| **Bizpark.Frontend** | Placeholder storefront — connects to Commerce, config-driven | 3004 | Next.js |
+| **Bizpark.Commerce.Web** | Tenant storefront — connects to Commerce, config-driven | 3004 | Next.js |
+| **Bizpark.MCP** ⭐ | AI Connect — MCP server exposing tenant store data to Claude | 3005 | Go |
+| **Bizpark.Mobile** ⭐ | Customer mobile app (per-tenant), OTA via EAS | — | Expo / React Native |
+
+> The merchant **SaaS dashboard** lives in a separate repo, [`BizSpark-AI---FE`](https://github.com/codesprint-bizspark/BizSpark-AI---FE).
 
 ## Prerequisites
 
@@ -209,6 +227,44 @@ All services share [`Bizpark.Core/.env`](./Bizpark.Core/.env.example)
 | `RUNNER_DB_SCHEMA` | Runner schema name (`runner`) |
 | `REDIS_HOST` | Redis host (`localhost`) |
 | `REDIS_PORT` | Redis port (`6379`) |
+| `COMMERCE_DATABASE_URL` | Commerce DB (separate Neon project; tenant schemas) |
+| `JWT_SECRET` / `INTERNAL_API_KEY` | auth + internal service auth |
+| `OPENAI_API_KEY` | OpenAI (LLM + `gpt-image-1` image fallback) |
+| `GEMINI_API_KEY` | Gemini — **primary** LLM for the agents |
+| `MINIMAX_API_KEY` | MiniMax — fallback LLM **and primary image generation** (`image-01`) |
+| `FACEBOOK_APP_ID` / `FACEBOOK_APP_SECRET` / `FACEBOOK_REDIRECT_URI` / `FACEBOOK_SCOPES` | Facebook page publishing (Meta app) |
+| `INSTAGRAM_APP_ID` / `INSTAGRAM_APP_SECRET` / `INSTAGRAM_REDIRECT_URI` / `INSTAGRAM_SCOPES` | Instagram publishing — **use the *Instagram* app id/secret** from "API setup with Instagram login", not the Facebook App ID |
+| `TOKEN_ENCRYPTION_KEY` / `OAUTH_STATE_SECRET` | encrypt stored OAuth tokens; sign OAuth state |
+| `PAYHERE_MERCHANT_ID` / `PAYHERE_MERCHANT_SECRET` / `PAYHERE_SANDBOX` | subscription billing (PayHere) |
+| `PUBLIC_API_URL` | public HTTPS base — PayHere `notify_url` + Instagram media fetch |
+| `FRONTEND_URL` / `COMMERCE_WEB_URL` | OAuth redirects + storefront links |
+| `MCP_PORT` / `MCP_PUBLIC_URL` | MCP server port (3005) + public base for AI Connect |
+
+## AI Connect (MCP) — `Bizpark.MCP`
+
+A standalone **Go** server that lets a merchant plug **their** store data into Claude (Desktop or Claude.ai web) over the Model Context Protocol. It reads the Commerce DB tenant schemas (products, orders, customers, revenue — read-only) and is multi-tenant isolated by per-business API keys (`McpApiKey`, auto-created in the Commerce DB).
+
+- **Claude Desktop:** HTTP+SSE transport — `mcp-remote https://admin.randitha.net/sse` + `Authorization: Bearer <biz_mcp_key>`.
+- **Claude.ai web:** Streamable HTTP transport at `/mcp` + OAuth 2.0/PKCE (with a `?key=` fallback). Keys are generated in the dashboard → **AI Connect**.
+
+```bash
+cd Bizpark.MCP && go run .   # needs COMMERCE_DATABASE_URL; serves :3005 (or MCP_PORT)
+```
+
+## Deployment
+
+Containerised and shipped via GitOps. Each service has a `Dockerfile.*` at the repo root; CI (`.github/workflows/build-publish-ghcr-update-infra.yml`) builds **7 images** on push to `main`, publishes to `ghcr.io/codesprint-bizspark/*`, and pins their digests in the [`Infra`](https://github.com/codesprint-bizspark/Infra) repo's prod overlay (ArgoCD then rolls them out to K3s).
+
+| Dockerfile | Image |
+|---|---|
+| `Dockerfile.api` | `bizpark-api` |
+| `Dockerfile.admin` | `bizpark-admin` |
+| `Dockerfile.commerce` | `bizpark-commerce` |
+| `Dockerfile.commerce-web` | `bizpark-commerce-web` |
+| `Dockerfile.runner` | `bizpark-runner` |
+| `Dockerfile.mcp` | `bizpark-mcp` |
+
+> Runtime config is delivered as a Bitnami **SealedSecret** (`bizpark-runtime-env`) — see the `Infra` repo. `Bizpark.Mobile` ships via **EAS** (`eas build` / `eas update`), not Docker.
 
 ## Database Schema
 

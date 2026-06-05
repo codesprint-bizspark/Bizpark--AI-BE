@@ -1,4 +1,4 @@
-import { Body, Controller, Get, HttpCode, HttpStatus, Patch, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, ForbiddenException, Get, Headers, HttpCode, HttpStatus, Patch, Post, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiResponse, ApiSecurity } from '@nestjs/swagger';
 import { TenantId } from '../tenant/tenant.decorator';
 import { AuthService } from './auth.service';
@@ -22,6 +22,21 @@ export class AuthController {
   @Post('bootstrap')
   bootstrap(@TenantId() tenantId: string, @Body() dto: CommerceAdminRegisterDto) {
     return this.authService.bootstrapAdmin(tenantId, dto.email, dto.password, dto.name);
+  }
+
+  @ApiOperation({ summary: 'Reset admin password', description: 'Internal only — resets the tenant admin password (no old password required).' })
+  @ApiResponse({ status: 201, description: 'Returns the admin email' })
+  @Post('admin/reset-password')
+  @HttpCode(HttpStatus.OK)
+  resetAdminPassword(
+    @TenantId() tenantId: string,
+    @Headers('x-internal-key') internalKey: string,
+    @Body() dto: CommerceAdminRegisterDto,
+  ) {
+    if (!internalKey || internalKey !== process.env.INTERNAL_API_KEY) {
+      throw new ForbiddenException('Invalid internal key');
+    }
+    return this.authService.resetAdminPassword(tenantId, dto.email, dto.password, dto.name);
   }
 
   @ApiOperation({ summary: 'Register customer', description: 'Public — registers a new CUSTOMER account.' })
