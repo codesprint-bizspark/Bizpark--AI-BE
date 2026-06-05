@@ -153,8 +153,9 @@ export class SocialContentController {
         @Param('businessId') businessId: string,
         @Param('postId') postId: string,
         @Body() body: { prompt?: string },
+        @CurrentUser() user: { id: string },
     ) {
-        const media = await this.service.generateImageForPost({ businessId, postId, prompt: body?.prompt });
+        const media = await this.service.generateImageForPost({ businessId, postId, userId: user.id, prompt: body?.prompt });
         return { success: true, data: media };
     }
 

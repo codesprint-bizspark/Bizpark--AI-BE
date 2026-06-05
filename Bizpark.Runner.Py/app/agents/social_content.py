@@ -19,6 +19,7 @@ logger = logging.getLogger("runner.agents.social_content")
 
 _llm: Optional[ChatGoogleGenerativeAI] = None
 _openai_image_client: Optional[AsyncOpenAI] = None
+AI_IMAGE_TOKEN_COST = 5000
 
 
 def _get_openai_image_client() -> Optional[AsyncOpenAI]:
@@ -463,6 +464,7 @@ async def run_social_content_agent(input_data: dict, session: AsyncSession) -> d
         logger.info(f"Waiting for {len(image_tasks)} image task(s) to complete…")
         task_platforms = list(image_tasks.keys())
         results = await asyncio.gather(*image_tasks.values(), return_exceptions=True)
+        successful_ai_images = 0
 
         for platform, result in zip(task_platforms, results):
             post_id = post_id_by_platform.get(platform)
@@ -482,6 +484,7 @@ async def run_social_content_agent(input_data: dict, session: AsyncSession) -> d
                 )
                 continue
 
+            successful_ai_images += 1
             media_id = str(uuid.uuid4())
             variant = variants.get(platform, {})
             # User uploads (if any) already occupy positions 0..len(userMedia)-1
@@ -506,7 +509,21 @@ async def run_social_content_agent(input_data: dict, session: AsyncSession) -> d
                 },
             )
             logger.info(f"AI image saved for {platform} post {post_id} at position {ai_position}")
+    else:
+        successful_ai_images = 0
 
     await session.commit()
     logger.info(f"Social content: {len(created_posts)} draft posts created for business {business_id}")
-    return {"posts": created_posts, "generationId": gen_id}
+    total_tokens = (prompt_tokens or 0) + (completion_tokens or 0) + successful_ai_images * AI_IMAGE_TOKEN_COST
+    return {
+        "posts": created_posts,
+        "generationId": gen_id,
+        "usage": {
+            "provider": "Gemini",
+            "model": "gemini-2.5-flash",
+            "promptTokens": prompt_tokens,
+            "completionTokens": completion_tokens,
+            "totalTokens": total_tokens,
+            "metadata": {"aiImages": successful_ai_images},
+        },
+    }

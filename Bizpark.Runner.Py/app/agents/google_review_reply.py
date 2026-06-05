@@ -50,7 +50,14 @@ async def run_google_review_reply_agent(business: dict, review: dict, policy: di
         raise RuntimeError("Review resource name is missing")
 
     if _llm is None:
-        return _fallback_reply(business, review)
+        return {
+            **_fallback_reply(business, review),
+            "usage": {
+                "provider": "fallback",
+                "model": "local-template",
+                "totalTokens": 0,
+            },
+        }
 
     auto_min = int(policy.get("autoReplyMinRating") or 4)
     prompt = f"""You write concise, brand-safe Google Business Profile review replies for small businesses.
@@ -90,15 +97,40 @@ Policy:
         parsed = json.loads(raw_text)
     except Exception as exc:
         logger.warning("Gemini review reply JSON parse failed: %s", exc)
-        return _fallback_reply(business, review)
+        return {
+            **_fallback_reply(business, review),
+            "usage": _usage_from_response(response, prompt),
+        }
 
     reply_text = str(parsed.get("replyText") or "").strip()
     if not reply_text:
-        return _fallback_reply(business, review)
+        return {
+            **_fallback_reply(business, review),
+            "usage": _usage_from_response(response, prompt),
+        }
 
     return {
         "replyText": reply_text[:900],
         "sentiment": parsed.get("sentiment") or "neutral",
         "riskLevel": parsed.get("riskLevel") or "medium",
         "autoEligible": bool(parsed.get("autoEligible")) and int(review.get("rating") or 0) >= auto_min,
+        "usage": _usage_from_response(response, prompt),
+    }
+
+
+def _usage_from_response(response, prompt: str) -> dict:
+    usage = getattr(response, "usage_metadata", None) or {}
+    prompt_tokens = usage.get("input_tokens") or usage.get("prompt_tokens")
+    completion_tokens = usage.get("output_tokens") or usage.get("completion_tokens")
+    total_tokens = usage.get("total_tokens")
+    if total_tokens is None:
+        prompt_tokens = prompt_tokens if prompt_tokens is not None else max(1, (len(prompt) + 3) // 4)
+        completion_tokens = completion_tokens if completion_tokens is not None else max(1, (len(response.content or "") + 3) // 4)
+        total_tokens = prompt_tokens + completion_tokens
+    return {
+        "provider": "Gemini",
+        "model": "gemini-2.5-flash",
+        "promptTokens": prompt_tokens,
+        "completionTokens": completion_tokens,
+        "totalTokens": total_tokens,
     }

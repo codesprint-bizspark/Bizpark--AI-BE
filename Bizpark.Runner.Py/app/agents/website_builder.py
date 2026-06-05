@@ -103,6 +103,7 @@ class WebsiteState(TypedDict):
     raw_cms_data: dict
     tone: str
     generated_content: Optional[dict]
+    usage: Optional[dict]
     error: Optional[str]
 
 
@@ -205,17 +206,17 @@ Return ONLY a valid JSON object — no markdown, no explanation, no extra text:
 
     # Fallback chain: Gemini → MiniMax → OpenAI (OpenAI last due to quota limits)
     candidates = [
-        ("Gemini",   _get_gemini()),
-        ("MiniMax",  _get_minimax()),
-        ("OpenAI",   _get_openai()),
+        ("Gemini",   "gemini-2.5-flash", _get_gemini()),
+        ("MiniMax",  "MiniMax-Text-01", _get_minimax()),
+        ("OpenAI",   "gpt-4o", _get_openai()),
     ]
-    candidates = [(name, llm) for name, llm in candidates if llm]
+    candidates = [(name, model, llm) for name, model, llm in candidates if llm]
     if not candidates:
         return {**state, "error": "No LLM available — set OPENAI_API_KEY, GEMINI_API_KEY, or MINIMAX_API_KEY"}
 
     last_error = ""
     errors: list[str] = []
-    for provider, llm in candidates:
+    for provider, model, llm in candidates:
         try:
             response = llm.invoke(prompt)
             generated = _parse(response.content)
@@ -225,7 +226,11 @@ Return ONLY a valid JSON object — no markdown, no explanation, no extra text:
                 logger.error(f"Website builder schema validation failed ({provider}): {ve}")
                 return {**state, "error": f"AI output did not match expected schema: {ve}"}
             logger.info(f"{provider} generated full config for {business_name}")
-            return {**state, "generated_content": generated}
+            return {
+                **state,
+                "generated_content": generated,
+                "usage": _usage_from_response(response, provider, model, prompt),
+            }
         except Exception as e:
             last_error = str(e)
             errors.append(f"{provider}: {last_error[:200]}")
@@ -233,6 +238,34 @@ Return ONLY a valid JSON object — no markdown, no explanation, no extra text:
 
     logger.error(f"All providers failed. Last error: {last_error}")
     return {**state, "error": f"All AI providers failed — {'; '.join(errors)}"}
+
+
+def _usage_from_response(response, provider: str, model: str, prompt: str) -> dict:
+    usage = getattr(response, "usage_metadata", None) or {}
+    response_metadata = getattr(response, "response_metadata", None) or {}
+    token_usage = response_metadata.get("token_usage") or {}
+    prompt_tokens = (
+        usage.get("input_tokens")
+        or usage.get("prompt_tokens")
+        or token_usage.get("prompt_tokens")
+    )
+    completion_tokens = (
+        usage.get("output_tokens")
+        or usage.get("completion_tokens")
+        or token_usage.get("completion_tokens")
+    )
+    total_tokens = usage.get("total_tokens") or token_usage.get("total_tokens")
+    if total_tokens is None:
+        prompt_tokens = prompt_tokens if prompt_tokens is not None else max(1, (len(prompt) + 3) // 4)
+        completion_tokens = completion_tokens if completion_tokens is not None else max(1, (len(response.content or "") + 3) // 4)
+        total_tokens = prompt_tokens + completion_tokens
+    return {
+        "provider": provider,
+        "model": model,
+        "promptTokens": prompt_tokens,
+        "completionTokens": completion_tokens,
+        "totalTokens": total_tokens,
+    }
 
 
 def should_end_on_error(state: WebsiteState) -> str:
@@ -254,10 +287,11 @@ async def run_website_builder(business: dict, raw_cms_data: dict, tone: str = "p
         "raw_cms_data": raw_cms_data,
         "tone": tone,
         "generated_content": None,
+        "usage": None,
         "error": None,
     })
 
     if result.get("error"):
         raise RuntimeError(result["error"])
 
-    return result["generated_content"]
+    return result["generated_content"], result.get("usage")

@@ -9,8 +9,12 @@ export class AgentController {
     constructor(private readonly agentService: AgentService) { }
 
     @Post('tasks')
-    async queueTask(@Body() body: CreateAgentTaskDto) {
-        return this.agentService.queueTask(body);
+    @UseGuards(JwtAuthGuard)
+    async queueTask(
+        @Body() body: CreateAgentTaskDto,
+        @CurrentUser() currentUser: { id: string; email: string; name: string },
+    ) {
+        return this.agentService.queueTask({ ...body, createdByUserId: currentUser.id });
     }
 
     @Get('tasks/:taskId')

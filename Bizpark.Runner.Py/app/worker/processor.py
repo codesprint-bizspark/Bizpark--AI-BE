@@ -2,6 +2,7 @@ import logging
 import uuid as uuid_lib
 from urllib.parse import urlparse
 
+import httpx
 from bullmq import Worker
 from sqlalchemy import select
 
@@ -22,6 +23,7 @@ async def process_agent_task(job, token=None):
     business_id = job_data["businessId"]
     task_type = job_data["taskType"]
     input_data = job_data.get("inputData", {})
+    usage_reservation_id = job_data.get("usageReservationId") or input_data.get("usageReservationId")
 
     logger.info(f"[AGENT START] Task {task_id} [{task_type}] for business {business_id}")
 
@@ -45,23 +47,28 @@ async def process_agent_task(job, token=None):
             session.add(task)
             await session.commit()
 
+        usage = None
         try:
             if task_type == "WEBSITE_GENERATION":
                 output = await _handle_website_generation(input_data)
                 task.status = TaskStatus.PENDING_APPROVAL
                 task.outputData = output
+                usage = _extract_usage(output)
             elif task_type == "MOBILE_APP_GENERATION":
                 output = await _handle_mobile_app_generation(input_data)
                 task.status = TaskStatus.PENDING_APPROVAL
                 task.outputData = output
+                usage = _extract_usage(output)
             elif task_type == "GOOGLE_REVIEW_REPLY":
                 output = await _handle_google_review_reply(input_data)
                 task.status = TaskStatus.COMPLETED
                 task.outputData = output
+                usage = _extract_usage(output)
             elif task_type == "SOCIAL_MEDIA_CONTENT":
                 output = await run_social_content_agent(input_data, session)
                 task.status = TaskStatus.COMPLETED
                 task.outputData = output
+                usage = _extract_usage(output)
             else:
                 logger.warning(f"[AGENT] No handler for task type '{task_type}' — marking FAILED")
                 task.status = TaskStatus.FAILED
@@ -74,6 +81,12 @@ async def process_agent_task(job, token=None):
 
         await session.commit()
 
+    if usage_reservation_id:
+        if task.status == TaskStatus.FAILED:
+            await _report_usage(usage_reservation_id, "RELEASED", task_id=task_id)
+        else:
+            await _report_usage(usage_reservation_id, "COMMITTED", task_id=task_id, usage=usage)
+
     logger.info(f"[AGENT DONE] Task {task_id}: {task.status.value}")
 
 
@@ -83,7 +96,7 @@ async def _handle_website_generation(input_data: dict) -> dict:
     cms_data = website_config.get("cmsData", {})
     tone = input_data.get("tone", "professional")
 
-    generated = await run_website_builder(
+    generated, usage = await run_website_builder(
         business=business,
         raw_cms_data=cms_data,
         tone=tone,
@@ -92,6 +105,7 @@ async def _handle_website_generation(input_data: dict) -> dict:
     return {
         "generatedContent": generated,
         "businessId": business.get("id"),
+        "usage": usage,
     }
 
 
@@ -111,7 +125,7 @@ async def _handle_mobile_app_generation(input_data: dict) -> dict:
     business = input_data.get("business", {})
     tone = input_data.get("tone", "professional")
 
-    generated = await run_mobile_app_builder(
+    generated, usage = await run_mobile_app_builder(
         business=business,
         tone=tone,
     )
@@ -119,7 +133,47 @@ async def _handle_mobile_app_generation(input_data: dict) -> dict:
     return {
         "generatedContent": generated,
         "businessId": business.get("id"),
+        "usage": usage,
     }
+
+
+def _extract_usage(output: dict | None) -> dict | None:
+    if isinstance(output, dict) and isinstance(output.get("usage"), dict):
+        return output["usage"]
+    return None
+
+
+async def _report_usage(
+    reservation_id: str,
+    status: str,
+    task_id: str,
+    usage: dict | None = None,
+) -> None:
+    api_base = (settings.api_internal_url or settings.public_api_url or "http://localhost:3000").rstrip("/")
+    usage = usage or {}
+    payload = {
+        "reservationId": reservation_id,
+        "status": status,
+        "promptTokens": usage.get("promptTokens"),
+        "completionTokens": usage.get("completionTokens"),
+        "totalTokens": usage.get("totalTokens"),
+        "provider": usage.get("provider"),
+        "model": usage.get("model"),
+        "metadata": {"taskId": task_id, **(usage.get("metadata") or {})},
+    }
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(
+                f"{api_base}/api/internal/usage/commit",
+                headers={
+                    "Content-Type": "application/json",
+                    "x-internal-key": settings.internal_api_key,
+                },
+                json=payload,
+            )
+            resp.raise_for_status()
+    except Exception as exc:
+        logger.warning(f"Usage {status.lower()} failed for reservation {reservation_id}: {exc}")
 
 
 async def start_worker():
