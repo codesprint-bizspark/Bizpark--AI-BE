@@ -22,6 +22,10 @@ export class CreateProductDto {
   @ApiPropertyOptional({ example: 'uuid-of-category' })
   @IsOptional() @IsString()
   categoryId?: string;
+
+  @ApiPropertyOptional({ example: 'https://...supabase.co/.../image.png', description: 'Product image URL (use the media upload endpoint)' })
+  @IsOptional() @IsString()
+  imageUrl?: string | null;
 }
 
 export class UpdateProductDto {
@@ -44,6 +48,10 @@ export class UpdateProductDto {
   @ApiPropertyOptional({ example: 'uuid-of-category', nullable: true })
   @IsOptional() @IsString()
   categoryId?: string | null;
+
+  @ApiPropertyOptional({ example: 'https://...supabase.co/.../image.png', nullable: true })
+  @IsOptional() @IsString()
+  imageUrl?: string | null;
 }
 
 export class CreateCategoryDto {

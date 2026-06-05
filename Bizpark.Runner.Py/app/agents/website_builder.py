@@ -93,7 +93,7 @@ def _get_minimax():
             api_key=settings.minimax_api_key,
             base_url="https://api.minimaxi.chat/v1",
             temperature=0.4,
-            model_kwargs={"response_format": {"type": "json_object"}},
+            # MiniMax does not support OpenAI-style response_format — JSON via prompt only
         )
     return _minimax_llm
 
@@ -214,6 +214,7 @@ Return ONLY a valid JSON object — no markdown, no explanation, no extra text:
         return {**state, "error": "No LLM available — set OPENAI_API_KEY, GEMINI_API_KEY, or MINIMAX_API_KEY"}
 
     last_error = ""
+    errors: list[str] = []
     for provider, llm in candidates:
         try:
             response = llm.invoke(prompt)
@@ -227,10 +228,11 @@ Return ONLY a valid JSON object — no markdown, no explanation, no extra text:
             return {**state, "generated_content": generated}
         except Exception as e:
             last_error = str(e)
+            errors.append(f"{provider}: {last_error[:200]}")
             logger.warning(f"{provider} failed: {e} — trying next provider")
 
     logger.error(f"All providers failed. Last error: {last_error}")
-    return {**state, "error": last_error}
+    return {**state, "error": f"All AI providers failed — {'; '.join(errors)}"}
 
 
 def should_end_on_error(state: WebsiteState) -> str:
