@@ -35,14 +35,73 @@ export type SubscriptionPlan = {
     badgeText: string;
     isPopular: boolean;
     benefits: string[];
+    quotas: SubscriptionPlanQuotas;
     startsAt: string | null;
     endsAt: string | null;
     timezone: string;
 };
 
+export type SubscriptionPlanQuotas = {
+    monthlyTokens: number;
+    websiteGenerations: number;
+    mobileAppGenerations: number;
+    socialPostGenerations: number;
+    businesses: number;
+    mcpKeys: number;
+};
+
 export type SubscriptionPlanSettings = {
     plans: SubscriptionPlan[];
     deletedPlanIds?: string[];
+};
+
+export const DEFAULT_AI_IMAGE_TOKEN_COST = 5000;
+
+export const DEFAULT_SUBSCRIPTION_PLAN_QUOTAS: Record<string, SubscriptionPlanQuotas> = {
+    starter: {
+        monthlyTokens: 150_000,
+        websiteGenerations: 3,
+        mobileAppGenerations: 0,
+        socialPostGenerations: 15,
+        businesses: 3,
+        mcpKeys: 2,
+    },
+    growth: {
+        monthlyTokens: 500_000,
+        websiteGenerations: 3,
+        mobileAppGenerations: 3,
+        socialPostGenerations: 40,
+        businesses: 3,
+        mcpKeys: 3,
+    },
+    pro: {
+        monthlyTokens: 1_200_000,
+        websiteGenerations: 6,
+        mobileAppGenerations: 6,
+        socialPostGenerations: 100,
+        businesses: 5,
+        mcpKeys: 5,
+    },
+    business: {
+        monthlyTokens: 3_000_000,
+        websiteGenerations: 6,
+        mobileAppGenerations: 6,
+        socialPostGenerations: 250,
+        businesses: 10,
+        mcpKeys: 8,
+    },
+};
+
+export const getDefaultPlanIdForTier = (tier?: string | null) => {
+    switch (tier) {
+        case SubscriptionTier.AGENCY:
+            return 'business';
+        case SubscriptionTier.PRO:
+            return 'growth';
+        case SubscriptionTier.FREE:
+        default:
+            return 'starter';
+    }
 };
 
 export const DEFAULT_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
@@ -61,12 +120,13 @@ export const DEFAULT_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         badgeText: '',
         isPopular: false,
         benefits: [
-            '1 Business',
-            '2 Website generations',
+            '3 Businesses',
+            '3 Website generations',
             'Facebook connection',
-            '10 Post generations',
-            '1 AI Connect (MCP) key',
+            '15 Post generations',
+            '2 AI Connect (MCP) keys',
         ],
+        quotas: DEFAULT_SUBSCRIPTION_PLAN_QUOTAS.starter,
         startsAt: null,
         endsAt: null,
         timezone: 'UTC',
@@ -86,13 +146,14 @@ export const DEFAULT_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         badgeText: 'Popular',
         isPopular: true,
         benefits: [
-            '1 Business',
-            '2 Website generations',
-            '2 Mobile app generations',
+            '3 Businesses',
+            '3 Website generations',
+            '3 Mobile app generations',
             'All social platforms (FB, IG, TikTok)',
-            '25 Post generations',
-            '2 AI Connect (MCP) keys',
+            '40 Post generations',
+            '3 AI Connect (MCP) keys',
         ],
+        quotas: DEFAULT_SUBSCRIPTION_PLAN_QUOTAS.growth,
         startsAt: null,
         endsAt: null,
         timezone: 'UTC',
@@ -112,13 +173,14 @@ export const DEFAULT_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         badgeText: '',
         isPopular: false,
         benefits: [
-            '1 Business',
-            '4 Website generations',
-            '4 Mobile app generations',
+            '5 Businesses',
+            '6 Website generations',
+            '6 Mobile app generations',
             'All social platforms',
-            '60 Post generations',
-            '3 AI Connect (MCP) keys',
+            '100 Post generations',
+            '5 AI Connect (MCP) keys',
         ],
+        quotas: DEFAULT_SUBSCRIPTION_PLAN_QUOTAS.pro,
         startsAt: null,
         endsAt: null,
         timezone: 'UTC',
@@ -138,13 +200,14 @@ export const DEFAULT_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
         badgeText: '',
         isPopular: false,
         benefits: [
-            '2 Businesses',
-            '4 Website generations',
-            '4 Mobile app generations',
+            '10 Businesses',
+            '6 Website generations',
+            '6 Mobile app generations',
             'All social platforms',
-            '150 Post generations',
-            '5 AI Connect (MCP) keys',
+            '250 Post generations',
+            '8 AI Connect (MCP) keys',
         ],
+        quotas: DEFAULT_SUBSCRIPTION_PLAN_QUOTAS.business,
         startsAt: null,
         endsAt: null,
         timezone: 'UTC',
@@ -167,6 +230,29 @@ const parseNullableNumber = (value: unknown) => {
     }
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : null;
+};
+
+const parseQuotaNumber = (value: unknown, fallback: number) => {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? Math.floor(parsed) : fallback;
+};
+
+const normalizeQuotas = (
+    value: unknown,
+    fallback?: SubscriptionPlanQuotas,
+    planId?: string,
+): SubscriptionPlanQuotas => {
+    const input = (value ?? {}) as Partial<SubscriptionPlanQuotas>;
+    const defaults = fallback ?? DEFAULT_SUBSCRIPTION_PLAN_QUOTAS[planId ?? ''] ?? DEFAULT_SUBSCRIPTION_PLAN_QUOTAS.starter;
+
+    return {
+        monthlyTokens: parseQuotaNumber(input.monthlyTokens, defaults.monthlyTokens),
+        websiteGenerations: parseQuotaNumber(input.websiteGenerations, defaults.websiteGenerations),
+        mobileAppGenerations: parseQuotaNumber(input.mobileAppGenerations, defaults.mobileAppGenerations),
+        socialPostGenerations: parseQuotaNumber(input.socialPostGenerations, defaults.socialPostGenerations),
+        businesses: parseQuotaNumber(input.businesses, defaults.businesses),
+        mcpKeys: parseQuotaNumber(input.mcpKeys, defaults.mcpKeys),
+    };
 };
 
 const parseDateString = (value: unknown) => {
@@ -204,6 +290,7 @@ const normalizePlan = (plan: Partial<SubscriptionPlan>, fallback?: SubscriptionP
         benefits: Array.isArray(plan.benefits)
             ? plan.benefits.map((benefit) => String(benefit).trim()).filter(Boolean)
             : fallback?.benefits ?? [],
+        quotas: normalizeQuotas(plan.quotas, fallback?.quotas, id),
         startsAt: parseDateString(plan.startsAt ?? fallback?.startsAt),
         endsAt: parseDateString(plan.endsAt ?? fallback?.endsAt),
         timezone: String(plan.timezone || fallback?.timezone || 'UTC').trim(),

@@ -15,11 +15,13 @@ import { PlatformRegistry } from './platforms/platform-registry.service';
 import { SocialPublishingController } from './publishing/social-publishing.controller';
 import { SocialPublishingService, SOCIAL_PUBLISH_QUEUE } from './publishing/social-publishing.service';
 import { SocialPublishingProcessor } from './publishing/social-publishing.processor';
+import { UsageModule } from '../usage/usage.module';
 
 @Module({
     imports: [
         AuthModule,
         AgentModule,
+        UsageModule,
         BullModule.registerQueue({
             name: SOCIAL_PUBLISH_QUEUE,
             defaultJobOptions: {

@@ -5,6 +5,7 @@ import {
     applicationDb,
     AttachMediaDto,
     BulkAttachMediaDto,
+    DEFAULT_AI_IMAGE_TOKEN_COST,
     GenerateSocialContentDto,
     RegenerateContentFieldDto,
     SocialMediaKind,
@@ -15,6 +16,7 @@ import {
     UpdatePostContentDto,
 } from 'bizpark.core';
 import { AgentService } from '../../agent/agent.service';
+import { UsageService } from '../../usage/usage.service';
 import { OpenAiService } from '../ai/openai.service';
 import {
     BusinessBrief,
@@ -28,6 +30,7 @@ export class SocialContentService {
     constructor(
         private readonly openai: OpenAiService,
         private readonly agentService: AgentService,
+        private readonly usageService: UsageService,
     ) { }
 
     async generateForBusiness(args: { dto: GenerateSocialContentDto; userId: string }): Promise<{
@@ -51,6 +54,7 @@ export class SocialContentService {
         const result = await this.agentService.queueTask({
             businessId: dto.businessId,
             taskType: TaskType.SOCIAL_MEDIA_CONTENT,
+            createdByUserId: args.userId,
             inputData: { dto, userId: args.userId },
         });
 
@@ -84,42 +88,64 @@ export class SocialContentService {
             instructions: args.dto.instructions,
         });
 
-        const t0 = Date.now();
-        const completion = await this.openai.chatJson(prompt, { temperature: 0.95 });
-        const parsed = this.openai.parseJson<Record<string, unknown>>(completion.text);
-        const latencyMs = Date.now() - t0;
-
-        await applicationDb.aiGeneration.create({
-            data: {
+        return this.usageService.consumeImmediate<ApiSocialPostEntity>(
+            {
+                userId: args.userId,
                 businessId: post.businessId,
-                postId: post.id,
-                platform: post.platform,
-                kind: this.kindFromField(args.dto.field),
-                model: completion.model,
-                input: { current: post, instructions: args.dto.instructions, field: args.dto.field },
-                output: parsed,
-                promptTokens: completion.promptTokens,
-                completionTokens: completion.completionTokens,
-                latencyMs,
-                createdByUserId: args.userId,
+                activityType: 'SOCIAL_FIELD_REGENERATION',
+                counterKey: 'socialPostGenerations',
+                counterAmount: 1,
+                tokenEstimate: 800,
+                metadata: { postId: post.id, field: args.dto.field },
             },
-        });
+            async () => {
+                const t0 = Date.now();
+                const completion = await this.openai.chatJson(prompt, { temperature: 0.95 });
+                const parsed = this.openai.parseJson<Record<string, unknown>>(completion.text);
+                const latencyMs = Date.now() - t0;
 
-        const patch: Partial<ApiSocialPostEntity> = {};
-        if (typeof parsed.caption === 'string') patch.caption = parsed.caption;
-        if (Array.isArray(parsed.hashtags)) patch.hashtags = this.sanitiseHashtags(parsed.hashtags as string[]);
-        if (typeof parsed.cta === 'string') patch.cta = parsed.cta;
-        if (parsed.imagePrompt || parsed.flyerPrompt || parsed.videoScript || parsed.videoConcept) {
-            patch.aiMetadata = {
-                ...(post.aiMetadata ?? {}),
-                ...(typeof parsed.imagePrompt === 'string' ? { imagePrompt: parsed.imagePrompt } : {}),
-                ...(typeof parsed.flyerPrompt === 'string' ? { flyerPrompt: parsed.flyerPrompt } : {}),
-                ...(parsed.videoScript ? { videoScript: parsed.videoScript } : {}),
-                ...(typeof parsed.videoConcept === 'string' ? { videoConcept: parsed.videoConcept } : {}),
-            };
-        }
+                await applicationDb.aiGeneration.create({
+                    data: {
+                        businessId: post.businessId,
+                        postId: post.id,
+                        platform: post.platform,
+                        kind: this.kindFromField(args.dto.field),
+                        model: completion.model,
+                        input: { current: post, instructions: args.dto.instructions, field: args.dto.field },
+                        output: parsed,
+                        promptTokens: completion.promptTokens,
+                        completionTokens: completion.completionTokens,
+                        latencyMs,
+                        createdByUserId: args.userId,
+                    },
+                });
 
-        return applicationDb.socialPost.update({ where: { id: post.id }, data: patch });
+                const patch: Partial<ApiSocialPostEntity> = {};
+                if (typeof parsed.caption === 'string') patch.caption = parsed.caption;
+                if (Array.isArray(parsed.hashtags)) patch.hashtags = this.sanitiseHashtags(parsed.hashtags as string[]);
+                if (typeof parsed.cta === 'string') patch.cta = parsed.cta;
+                if (parsed.imagePrompt || parsed.flyerPrompt || parsed.videoScript || parsed.videoConcept) {
+                    patch.aiMetadata = {
+                        ...(post.aiMetadata ?? {}),
+                        ...(typeof parsed.imagePrompt === 'string' ? { imagePrompt: parsed.imagePrompt } : {}),
+                        ...(typeof parsed.flyerPrompt === 'string' ? { flyerPrompt: parsed.flyerPrompt } : {}),
+                        ...(parsed.videoScript ? { videoScript: parsed.videoScript } : {}),
+                        ...(typeof parsed.videoConcept === 'string' ? { videoConcept: parsed.videoConcept } : {}),
+                    };
+                }
+
+                const updated = await applicationDb.socialPost.update({ where: { id: post.id }, data: patch });
+                return {
+                    result: updated,
+                    usage: {
+                        provider: 'OpenAI',
+                        model: completion.model,
+                        promptTokens: completion.promptTokens,
+                        completionTokens: completion.completionTokens,
+                    },
+                };
+            },
+        );
     }
 
     async updatePost(args: { postId: string; businessId: string; dto: UpdatePostContentDto }): Promise<ApiSocialPostEntity> {
@@ -290,7 +316,7 @@ export class SocialContentService {
         return applicationDb.socialPostMedia.softDelete({ where: { id: args.mediaId } });
     }
 
-    async generateImageForPost(args: { businessId: string; postId: string; prompt?: string }) {
+    async generateImageForPost(args: { businessId: string; postId: string; userId: string; prompt?: string }) {
         const post = await applicationDb.socialPost.findUnique({ where: { id: args.postId } });
         if (!post) throw new NotFoundException('Post not found');
         if (post.businessId !== args.businessId) throw new ForbiddenException('Forbidden');
@@ -300,18 +326,40 @@ export class SocialContentService {
         const finalPrompt = args.prompt || fallbackPrompt;
         if (!finalPrompt) throw new BadRequestException('No image prompt available — provide one explicitly or regenerate image_prompt first');
 
-        const img = await this.openai.generateImage({ prompt: finalPrompt });
-        return applicationDb.socialPostMedia.create({
-            data: {
-                postId: post.id,
-                kind: SocialMediaKind.IMAGE,
-                source: SocialMediaSource.AI_GENERATED,
-                url: img.url,
-                mimeType: 'image/png',
-                prompt: img.promptUsed,
-                metadata: { model: img.model, size: img.size },
+        return this.usageService.consumeImmediate(
+            {
+                userId: args.userId,
+                businessId: post.businessId,
+                activityType: 'SOCIAL_AI_IMAGE',
+                counterKey: 'socialPostGenerations',
+                counterAmount: 1,
+                tokenEstimate: DEFAULT_AI_IMAGE_TOKEN_COST,
+                metadata: { postId: post.id },
             },
-        });
+            async () => {
+                const img = await this.openai.generateImage({ prompt: finalPrompt });
+                const media = await applicationDb.socialPostMedia.create({
+                    data: {
+                        postId: post.id,
+                        kind: SocialMediaKind.IMAGE,
+                        source: SocialMediaSource.AI_GENERATED,
+                        url: img.url,
+                        mimeType: 'image/png',
+                        prompt: img.promptUsed,
+                        metadata: { model: img.model, size: img.size },
+                    },
+                });
+                return {
+                    result: media,
+                    usage: {
+                        provider: 'OpenAI',
+                        model: img.model,
+                        totalTokens: DEFAULT_AI_IMAGE_TOKEN_COST,
+                        metadata: { size: img.size },
+                    },
+                };
+            },
+        );
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────

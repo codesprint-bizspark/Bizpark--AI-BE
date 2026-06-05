@@ -10,6 +10,8 @@ import { ApiSocialAccountEntity } from './social-account.entity';
 import { ApiSocialPostEntity } from './social-post.entity';
 import { ApiSocialPostMediaEntity } from './social-post-media.entity';
 import { ApiAiGenerationEntity } from './ai-generation.entity';
+import { ApiAiUsageEventEntity } from './ai-usage-event.entity';
+import { ApiAiUsagePeriodEntity } from './ai-usage-period.entity';
 import { ApiPublishingLogEntity } from './publishing-log.entity';
 import { ApiMcpApiKeyEntity } from './mcp-api-key.entity';
 
@@ -24,6 +26,8 @@ export const API_ENTITIES = [
     ApiSocialPostEntity,
     ApiSocialPostMediaEntity,
     ApiAiGenerationEntity,
+    ApiAiUsagePeriodEntity,
+    ApiAiUsageEventEntity,
     ApiPublishingLogEntity,
     ApiGoogleBusinessConnectionEntity,
     ApiGoogleBusinessReviewEntity,
@@ -42,5 +46,7 @@ export * from './social-account.entity';
 export * from './social-post.entity';
 export * from './social-post-media.entity';
 export * from './ai-generation.entity';
+export * from './ai-usage-event.entity';
+export * from './ai-usage-period.entity';
 export * from './publishing-log.entity';
 export * from './mcp-api-key.entity';
