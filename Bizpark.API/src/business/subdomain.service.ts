@@ -41,14 +41,24 @@ export class SubdomainService implements OnModuleInit {
   constructor(private readonly cloudflare: CloudflareService) {}
 
   async onModuleInit() {
-    // Ensure the slug column + a partial unique index exist (idempotent),
-    // so we don't depend on a separate migration run at deploy time.
+    // Ensure the slug column + a partial unique index exist (idempotent), so we
+    // don't depend on a separate migration run. The businesses table lives in the
+    // application schema (APPLICATION_DB_SCHEMA, e.g. "api"), so qualify by the
+    // schema discovered from information_schema rather than the search_path.
     try {
       await this.withAppDb(async (c) => {
-        await c.query(`ALTER TABLE businesses ADD COLUMN IF NOT EXISTS slug VARCHAR(63)`);
-        await c.query(
-          `CREATE UNIQUE INDEX IF NOT EXISTS idx_businesses_slug ON businesses (slug) WHERE slug IS NOT NULL`,
+        const res = await c.query(
+          `SELECT table_schema FROM information_schema.tables WHERE table_name = 'businesses'`,
         );
+        for (const row of res.rows as Array<{ table_schema: string }>) {
+          const schema = row.table_schema;
+          await c.query(
+            `ALTER TABLE "${schema}".businesses ADD COLUMN IF NOT EXISTS slug VARCHAR(63)`,
+          );
+          await c.query(
+            `CREATE UNIQUE INDEX IF NOT EXISTS idx_businesses_slug ON "${schema}".businesses (slug) WHERE slug IS NOT NULL`,
+          );
+        }
       });
     } catch (e) {
       this.logger.error(`Failed to ensure businesses.slug column: ${(e as Error).message}`);
@@ -56,7 +66,9 @@ export class SubdomainService implements OnModuleInit {
   }
 
   private async withAppDb<T>(fn: (c: Client) => Promise<T>): Promise<T> {
-    const client = new Client({ connectionString: process.env.DATABASE_URL });
+    const client = new Client({
+      connectionString: process.env.APPLICATION_DATABASE_URL || process.env.DATABASE_URL,
+    });
     await client.connect();
     try {
       return await fn(client);
