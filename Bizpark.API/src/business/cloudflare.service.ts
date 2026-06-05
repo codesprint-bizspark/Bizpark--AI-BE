@@ -25,46 +25,16 @@ export class CloudflareService {
     return Boolean(this.token && this.zoneId);
   }
 
-  /** Create a proxied CNAME <slug>.<baseDomain> -> <baseDomain>. Idempotent. */
+  /**
+   * No-op. A DNS-only wildcard `*.bizspark.online` -> VM now resolves every
+   * tenant subdomain instantly (served with a Let's Encrypt wildcard cert), so
+   * we no longer create a per-tenant record. Creating one (a proxied CNAME)
+   * would actually *override* the wildcard and re-introduce the propagation /
+   * NXDOMAIN delay, so we deliberately do nothing here.
+   */
   async createSubdomain(slug: string): Promise<void> {
-    if (!this.enabled) {
-      this.logger.warn(
-        'Cloudflare not configured (CLOUDFLARE_API_TOKEN/CLOUDFLARE_ZONE_ID) — skipping DNS record',
-      );
-      return;
-    }
-
-    const res = await fetch(
-      `https://api.cloudflare.com/client/v4/zones/${this.zoneId}/dns_records`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.token}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          type: 'CNAME',
-          name: slug,
-          content: this.baseDomain,
-          proxied: true,
-          ttl: 1,
-          comment: 'tenant storefront subdomain',
-        }),
-      },
+    this.logger.log(
+      `Subdomain ${slug}.${this.baseDomain} is served by the wildcard DNS — no per-record needed`,
     );
-
-    const data: any = await res.json().catch(() => ({}));
-    if (!data?.success) {
-      // 81053 / 81057 = "record already exists" → treat as success (idempotent).
-      const codes: number[] = (data?.errors || []).map((e: any) => e?.code);
-      if (codes.includes(81053) || codes.includes(81057)) {
-        this.logger.log(`DNS record ${slug}.${this.baseDomain} already exists — ok`);
-        return;
-      }
-      throw new Error(
-        `Cloudflare DNS create failed: ${JSON.stringify(data?.errors ?? data)}`,
-      );
-    }
-    this.logger.log(`Created DNS record ${slug}.${this.baseDomain}`);
   }
 }
