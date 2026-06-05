@@ -41,11 +41,16 @@ export default function ProductCard({ product, currency = 'USD' }: Props) {
 
   return (
     <Link href={`/shop/${product.id}`} className="group flex flex-col bg-white rounded-xl border hover:shadow-md transition-shadow overflow-hidden">
-      {/* Product image placeholder — agent can later add imageUrl to product */}
-      <div className="aspect-square bg-gray-100 flex items-center justify-center" style={{ backgroundColor: `${primary}10` }}>
-        <svg className="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
-        </svg>
+      {/* Product image — falls back to a placeholder when none is set */}
+      <div className="aspect-square bg-gray-100 flex items-center justify-center overflow-hidden" style={{ backgroundColor: `${primary}10` }}>
+        {product.imageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={product.imageUrl} alt={product.title} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+        ) : (
+          <svg className="w-12 h-12 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+          </svg>
+        )}
       </div>
       <div className="p-4 flex flex-col flex-1">
         <h3 className="font-medium text-gray-900 text-sm line-clamp-2 flex-1">{product.title}</h3>

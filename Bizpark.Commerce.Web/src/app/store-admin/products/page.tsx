@@ -4,13 +4,13 @@ import { useEffect, useState } from 'react';
 import { useApp } from '@/context/AppContext';
 import {
   getProducts, getCategories, getVariants,
-  adminCreateProduct, adminUpdateProduct, adminDeleteProduct,
+  adminCreateProduct, adminUpdateProduct, adminDeleteProduct, adminUploadProductImage,
   adminCreateVariant, adminUpdateVariant, adminDeleteVariant,
 } from '@/lib/api';
 import type { Product, Category, ProductVariant } from '@/types';
 
-type ProductForm = { title: string; description: string; price: string; currency: string; categoryId: string };
-const EMPTY_PRODUCT: ProductForm = { title: '', description: '', price: '', currency: 'USD', categoryId: '' };
+type ProductForm = { title: string; description: string; price: string; currency: string; categoryId: string; imageUrl: string };
+const EMPTY_PRODUCT: ProductForm = { title: '', description: '', price: '', currency: 'USD', categoryId: '', imageUrl: '' };
 
 type VariantForm = { title: string; sku: string; price: string; isActive: boolean };
 const EMPTY_VARIANT: VariantForm = { title: '', sku: '', price: '', isActive: true };
@@ -48,6 +48,7 @@ export default function AdminProductsPage() {
   const [modal, setModal] = useState<{ mode: 'create' | 'edit'; product?: Product } | null>(null);
   const [form, setForm] = useState<ProductForm>(EMPTY_PRODUCT);
   const [saving, setSaving] = useState(false);
+  const [uploadingImg, setUploadingImg] = useState(false);
   const [error, setError] = useState('');
 
   // Variant modal
@@ -73,9 +74,20 @@ export default function AdminProductsPage() {
   // ── Product CRUD ──────────────────────────────────────────────────
   const openCreate = () => { setForm(EMPTY_PRODUCT); setError(''); setModal({ mode: 'create' }); };
   const openEdit = (p: Product) => {
-    setForm({ title: p.title, description: p.description ?? '', price: String(p.price), currency: p.currency, categoryId: p.categoryId ?? '' });
+    setForm({ title: p.title, description: p.description ?? '', price: String(p.price), currency: p.currency, categoryId: p.categoryId ?? '', imageUrl: p.imageUrl ?? '' });
     setError('');
     setModal({ mode: 'edit', product: p });
+  };
+
+  const handleImageFile = async (file: File) => {
+    if (!token) return;
+    setError(''); setUploadingImg(true);
+    try {
+      const url = await adminUploadProductImage(token, file);
+      setForm(f => ({ ...f, imageUrl: url }));
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Image upload failed');
+    } finally { setUploadingImg(false); }
   };
 
   const handleSave = async () => {
@@ -88,6 +100,7 @@ export default function AdminProductsPage() {
         price: parseFloat(form.price),
         currency: form.currency,
         categoryId: form.categoryId || undefined,
+        imageUrl: form.imageUrl || null,
       };
       if (modal?.mode === 'create') await adminCreateProduct(token, dto);
       else if (modal?.product) await adminUpdateProduct(token, modal.product.id, dto);
@@ -191,7 +204,17 @@ export default function AdminProductsPage() {
             <tbody>
               {products.map(p => (
                 <tr key={p.id} className="border-b last:border-0 hover:bg-gray-50">
-                  <td className="px-5 py-3 font-medium text-gray-900">{p.title}</td>
+                  <td className="px-5 py-3 font-medium text-gray-900">
+                    <div className="flex items-center gap-3">
+                      {p.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={p.imageUrl} alt="" className="size-9 rounded object-cover border" />
+                      ) : (
+                        <span className="size-9 rounded bg-gray-100 border flex items-center justify-center text-[9px] text-gray-400">—</span>
+                      )}
+                      <span>{p.title}</span>
+                    </div>
+                  </td>
                   <td className="px-5 py-3 text-gray-500 hidden sm:table-cell">{findCategoryName(categories, p.categoryId)}</td>
                   <td className="px-5 py-3 text-right font-medium">{fmt(p.price, p.currency)}</td>
                   <td className="px-5 py-3 text-right">
@@ -226,6 +249,35 @@ export default function AdminProductsPage() {
             </div>
             <div className="px-6 py-5 space-y-4">
               <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1">Image</label>
+                <div className="flex items-center gap-3">
+                  <div className="size-20 shrink-0 rounded-lg border border-dashed border-gray-300 bg-gray-50 overflow-hidden flex items-center justify-center">
+                    {form.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={form.imageUrl} alt="" className="w-full h-full object-cover" />
+                    ) : (
+                      <span className="text-[10px] text-gray-400 text-center px-1">No image</span>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <label className="inline-flex items-center px-3 py-2 border rounded-lg text-sm cursor-pointer hover:bg-gray-50">
+                      {uploadingImg ? 'Uploading…' : form.imageUrl ? 'Replace image' : 'Upload image'}
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/svg+xml,image/gif"
+                        className="hidden"
+                        disabled={uploadingImg}
+                        onChange={e => { const f = e.target.files?.[0]; if (f) void handleImageFile(f); e.target.value = ''; }}
+                      />
+                    </label>
+                    {form.imageUrl && (
+                      <button type="button" onClick={() => setForm(f => ({ ...f, imageUrl: '' }))} className="ml-2 text-xs text-red-600 hover:underline">Remove</button>
+                    )}
+                    <p className="text-[11px] text-gray-400 mt-1">JPEG, PNG, WebP, SVG or GIF · max 5MB</p>
+                  </div>
+                </div>
+              </div>
+              <div>
                 <label className="block text-xs font-medium text-gray-700 mb-1">Title *</label>
                 <input className={inputCls} value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="Product name" />
               </div>
@@ -256,7 +308,7 @@ export default function AdminProductsPage() {
             </div>
             <div className="px-6 py-4 border-t flex justify-end gap-3">
               <button onClick={() => setModal(null)} className="px-4 py-2 border rounded-lg text-sm">Cancel</button>
-              <button onClick={handleSave} disabled={saving || !form.title || !form.price} className="px-5 py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50" style={{ backgroundColor: primary }}>
+              <button onClick={handleSave} disabled={saving || uploadingImg || !form.title || !form.price} className="px-5 py-2 rounded-lg text-white text-sm font-medium disabled:opacity-50" style={{ backgroundColor: primary }}>
                 {saving ? 'Saving...' : 'Save'}
               </button>
             </div>
