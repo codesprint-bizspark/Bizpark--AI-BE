@@ -209,6 +209,10 @@ const createApplicationClient = () => ({
                 relations: ['users', 'users.user', 'websites', 'subscriptions'],
             });
         },
+        findBySlug: async (args: { where: { slug: string } }) => {
+            const ds = await ensureDataSourceInitialized(getApplicationDataSource());
+            return ds.getRepository(ApiBusinessEntity).findOne({ where: { slug: args.where.slug } });
+        },
         update: async (args: { where: { id: string }; data: Partial<ApiBusinessEntity> }) => {
             const ds = await ensureDataSourceInitialized(getApplicationDataSource());
             const repo = ds.getRepository(ApiBusinessEntity);
