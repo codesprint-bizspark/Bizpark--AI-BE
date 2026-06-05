@@ -1,5 +1,5 @@
 import {
-    Controller, Get, Post, Patch, Body, Param, UseGuards, BadRequestException, UploadedFile, UseInterceptors,
+    Controller, Get, Post, Patch, Body, Param, Query, UseGuards, BadRequestException, UploadedFile, UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { BusinessService } from './business.service';
@@ -10,6 +10,7 @@ import { AgentService } from '../agent/agent.service';
 import { MediaStorageService } from '../media/media-storage.service';
 import { randomBytes } from 'node:crypto';
 import { UsageService } from '../usage/usage.service';
+import { SubdomainService } from './subdomain.service';
 
 @Controller('api/business')
 @UseGuards(JwtAuthGuard)
@@ -19,7 +20,29 @@ export class BusinessController {
         private readonly agentService: AgentService,
         private readonly mediaStorage: MediaStorageService,
         private readonly usageService: UsageService,
+        private readonly subdomainService: SubdomainService,
     ) { }
+
+    // ── Storefront subdomain (<slug>.bizspark.online) ────────────────────────
+    /** Live availability check used by the dashboard as the user types. */
+    @Get(':id/subdomain/check')
+    async checkSubdomain(
+        @Param('id') id: string,
+        @Query('slug') slug: string,
+        @CurrentUser() user: { id: string },
+    ) {
+        return this.subdomainService.check(slug ?? '', id, user);
+    }
+
+    /** Claim a subdomain: validate, persist, create the proxied DNS record. */
+    @Post(':id/subdomain')
+    async claimSubdomain(
+        @Param('id') id: string,
+        @Body() body: { slug: string },
+        @CurrentUser() user: { id: string },
+    ) {
+        return this.subdomainService.claim(body?.slug ?? '', id, user);
+    }
 
     @Post()
     async createBusiness(@Body() dto: CreateBusinessDto, @CurrentUser() user: { id: string; email: string; name: string }) {

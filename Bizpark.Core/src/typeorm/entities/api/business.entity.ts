@@ -10,6 +10,11 @@ export class ApiBusinessEntity extends BaseEntityWithTimestamps {
     @Column({ type: 'varchar', length: 255 })
     name!: string;
 
+    // Storefront subdomain label (<slug>.bizspark.online). Unique enforced via a
+    // partial unique index created at runtime (see SubdomainService).
+    @Column({ type: 'varchar', length: 63, nullable: true })
+    slug!: string | null;
+
     @Column({ type: 'varchar', length: 255, nullable: true })
     category!: string | null;
 
