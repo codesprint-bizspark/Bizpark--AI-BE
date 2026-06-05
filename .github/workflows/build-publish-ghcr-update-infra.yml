@@ -145,8 +145,8 @@ jobs:
           file: ${{ matrix.dockerfile }}
           push: true
           build-args: |
-            NEXT_PUBLIC_COMMERCE_URL=${{ vars.NEXT_PUBLIC_COMMERCE_URL || 'https://commerce.randitha.net' }}
-            NEXT_PUBLIC_BASE_DOMAIN=${{ vars.NEXT_PUBLIC_BASE_DOMAIN || 'randitha.net' }}
+            NEXT_PUBLIC_COMMERCE_URL=${{ vars.NEXT_PUBLIC_COMMERCE_URL || 'https://commerce.bizspark.online' }}
+            NEXT_PUBLIC_BASE_DOMAIN=${{ vars.NEXT_PUBLIC_BASE_DOMAIN || 'bizspark.online' }}
           tags: |
             ${{ steps.image.outputs.name }}:latest
             ${{ steps.image.outputs.name }}:sha-${{ github.sha }}

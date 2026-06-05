@@ -41,7 +41,7 @@
       "typedRoutes": true
     },
     "extra": {
-      "COMMERCE_URL": "https://commerce.randitha.net",
+      "COMMERCE_URL": "https://commerce.bizspark.online",
       "router": {},
       "eas": {
         "projectId": "9a5827a0-38ee-4405-ba8c-0576a8539bd4"
