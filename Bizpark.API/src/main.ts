@@ -1,8 +1,17 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { config as loadEnv } from 'dotenv';
 import { json, urlencoded } from 'express';
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
 import { AppModule } from './app.module';
+
+// Load Bizpark.Core/.env in local dev (same pattern as other services)
+const coreEnv = join(__dirname, '..', '..', 'Bizpark.Core', '.env');
+if (existsSync(coreEnv)) {
+  loadEnv({ path: coreEnv });
+}
 
 async function bootstrap() {
   // Users send images / videos to /social/content/generate as base64 data
@@ -24,6 +33,8 @@ async function bootstrap() {
   app.use(json({ limit: BODY_LIMIT }));
   app.use(urlencoded({ extended: true, limit: BODY_LIMIT }));
   new Logger('Bootstrap').log(`JSON body parser limit set to ${BODY_LIMIT}`);
+
+  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' });
 
   // ALLOWED_ORIGINS = comma-separated list, e.g.:
   //   https://app.bizpark.app,https://bizpark.app,https://*.bizpark.app
