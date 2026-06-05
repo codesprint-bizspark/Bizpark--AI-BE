@@ -14,7 +14,7 @@ import { NextRequest, NextResponse } from 'next/server';
  */
 export default function middleware(request: NextRequest) {
   const hostname = request.headers.get('host') || '';
-  const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'adeepak.me';
+  const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN || 'bizspark.online';
   const { searchParams } = request.nextUrl;
 
   // 1. Explicit ?tenant= wins — lets a single fixed storefront host
