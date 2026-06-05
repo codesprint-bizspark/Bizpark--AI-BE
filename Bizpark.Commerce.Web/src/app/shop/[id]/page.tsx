@@ -57,11 +57,16 @@ export default function ProductPage() {
       </button>
 
       <div className="grid md:grid-cols-2 gap-12">
-        {/* Image placeholder */}
-        <div className="aspect-square rounded-2xl flex items-center justify-center" style={{ backgroundColor: `${primary}10` }}>
-          <svg className="w-24 h-24 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
-          </svg>
+        {/* Product image — falls back to a placeholder when none is set */}
+        <div className="aspect-square rounded-2xl flex items-center justify-center overflow-hidden" style={{ backgroundColor: `${primary}10` }}>
+          {product.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={product.imageUrl} alt={product.title} className="w-full h-full object-cover" />
+          ) : (
+            <svg className="w-24 h-24 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"/>
+            </svg>
+          )}
         </div>
 
         {/* Details */}

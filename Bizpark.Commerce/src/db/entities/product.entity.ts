@@ -17,6 +17,10 @@ export class ProductEntity {
   @Column({ type: 'varchar', length: 10, default: 'USD' })
   currency!: string;
 
+  // Optional product image (Supabase Storage public URL) — null = no image
+  @Column({ type: 'text', nullable: true })
+  imageUrl!: string | null;
+
   // Optional category — null = uncategorised
   @Column({ type: 'uuid', nullable: true })
   categoryId!: string | null;
