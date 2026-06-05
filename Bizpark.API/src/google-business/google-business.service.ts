@@ -124,6 +124,7 @@ export class GoogleBusinessService {
         const task = await this.agentService.queueTask({
           businessId,
           taskType: TaskType.GOOGLE_REVIEW_REPLY,
+          createdByUserId: user.id,
           inputData: {
             business: {
               id: business.id,

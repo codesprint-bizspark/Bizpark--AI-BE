@@ -158,7 +158,7 @@ const createApplicationClient = () => ({
             });
         },
         findMany: async (args?: {
-            where?: { users?: { some?: { userId?: string } } };
+            where?: { users?: { some?: { userId?: string; role?: UserRole | string } } };
             orderBy?: { createdAt?: OrderDirection };
         }) => {
             const ds = await ensureDataSourceInitialized(getApplicationDataSource());
@@ -169,6 +169,9 @@ const createApplicationClient = () => ({
             if (userId) {
                 qb.innerJoin(ApiBusinessUserEntity, 'business_user', 'business_user.businessId = business.id');
                 qb.andWhere('business_user.userId = :userId', { userId });
+                if (args?.where?.users?.some?.role) {
+                    qb.andWhere('business_user.role = :role', { role: args.where.users.some.role });
+                }
             }
 
             const order = resolveOrder(args?.orderBy?.createdAt);

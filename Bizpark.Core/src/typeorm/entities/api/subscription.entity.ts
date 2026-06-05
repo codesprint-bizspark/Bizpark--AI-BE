@@ -15,6 +15,9 @@ export class ApiSubscriptionEntity extends BaseEntityWithTimestamps {
     })
     tier!: SubscriptionTier;
 
+    @Column({ type: 'varchar', length: 100, nullable: true })
+    planId!: string | null;
+
     @Column({
         type: 'enum',
         enum: SubscriptionStatus,

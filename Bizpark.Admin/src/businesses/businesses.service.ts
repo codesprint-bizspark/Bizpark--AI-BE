@@ -2,6 +2,7 @@ import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   applicationDb,
   BusinessStatus,
+  getDefaultPlanIdForTier,
   SubscriptionStatus,
   SubscriptionTier,
 } from 'bizpark.core';
@@ -161,6 +162,7 @@ export class BusinessesService {
       businessId: id,
       data: {
         tier: input.tier,
+        planId: getDefaultPlanIdForTier(input.tier),
         status: input.status,
         startedAt: before?.startedAt ?? new Date(),
         expiresAt: input.expiresAt ? new Date(input.expiresAt) : null,

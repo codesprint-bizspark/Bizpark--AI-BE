@@ -5,6 +5,7 @@ import {
   normalizeSubscriptionPlanSettings,
   SUBSCRIPTION_PLAN_SETTINGS_NAME,
   SubscriptionPlan,
+  SubscriptionPlanQuotas,
   SubscriptionPlanSettings,
   SubscriptionPlanType,
   SubscriptionPlanVisibility,
@@ -26,6 +27,12 @@ export type SubscriptionPlanFormInput = {
   badgeText?: string;
   isPopular?: string;
   benefits?: string | string[];
+  monthlyTokens?: string;
+  websiteGenerations?: string;
+  mobileAppGenerations?: string;
+  socialPostGenerations?: string;
+  businesses?: string;
+  mcpKeys?: string;
   startsAt?: string;
   endsAt?: string;
   timezone?: string;
@@ -150,9 +157,29 @@ export class SubscriptionsService {
       badgeText: String(input.badgeText || existing?.badgeText || '').trim(),
       isPopular: input.isPopular === 'on',
       benefits: this.parseBenefits(input.benefits, existing?.benefits ?? []),
+      quotas: this.parseQuotas(input, existing?.quotas),
       startsAt,
       endsAt,
       timezone: String(input.timezone || existing?.timezone || 'UTC').trim(),
+    };
+  }
+
+  private parseQuotas(input: SubscriptionPlanFormInput, fallback?: SubscriptionPlanQuotas): SubscriptionPlanQuotas {
+    const defaults = fallback ?? {
+      monthlyTokens: 150000,
+      websiteGenerations: 3,
+      mobileAppGenerations: 0,
+      socialPostGenerations: 15,
+      businesses: 3,
+      mcpKeys: 2,
+    };
+    return {
+      monthlyTokens: this.parseInteger(input.monthlyTokens, defaults.monthlyTokens),
+      websiteGenerations: this.parseInteger(input.websiteGenerations, defaults.websiteGenerations),
+      mobileAppGenerations: this.parseInteger(input.mobileAppGenerations, defaults.mobileAppGenerations),
+      socialPostGenerations: this.parseInteger(input.socialPostGenerations, defaults.socialPostGenerations),
+      businesses: this.parseInteger(input.businesses, defaults.businesses),
+      mcpKeys: this.parseInteger(input.mcpKeys, defaults.mcpKeys),
     };
   }
 
@@ -202,6 +229,11 @@ export class SubscriptionsService {
     }
     const parsed = Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
+  }
+
+  private parseInteger(value: string | number | null | undefined, fallback: number) {
+    const parsed = this.parseNumber(value, fallback);
+    return Math.max(0, Math.floor(parsed ?? fallback));
   }
 
   private parseDateInput(value?: string) {
