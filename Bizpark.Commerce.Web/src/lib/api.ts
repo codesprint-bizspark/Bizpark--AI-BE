@@ -4,7 +4,15 @@ import type {
   Product, ProductVariant, ShippingMethod, WebsiteConfig, WebsiteConfigContent,
 } from '@/types';
 
-const BASE = process.env.NEXT_PUBLIC_COMMERCE_URL || 'http://localhost:3003';
+// On the server (SSR / server components) call the commerce API in-cluster to
+// avoid a Cloudflare round-trip on every dynamic render; the browser uses the
+// public URL. `typeof window` resolves per-bundle (undefined in the server build).
+const BASE =
+  typeof window === 'undefined'
+    ? process.env.INTERNAL_COMMERCE_URL ||
+      process.env.NEXT_PUBLIC_COMMERCE_URL ||
+      'http://localhost:3003'
+    : process.env.NEXT_PUBLIC_COMMERCE_URL || 'http://localhost:3003';
 
 async function req<T>(
   path: string,
