@@ -69,6 +69,36 @@
     <input id="plan-discount-<%= plan.id || 'new' %>" type="number" min="0" max="100" step="1" name="discountPercentage" value="<%= plan.discountPercentage || '' %>">
   </div>
 
+  <div class="form-field" data-field="monthlyTokens">
+    <label for="plan-monthly-tokens-<%= plan.id || 'new' %>">Monthly Tokens</label>
+    <input id="plan-monthly-tokens-<%= plan.id || 'new' %>" type="number" min="0" step="1000" name="monthlyTokens" value="<%= plan.quotas?.monthlyTokens ?? 100000 %>">
+  </div>
+
+  <div class="form-field" data-field="websiteGenerations">
+    <label for="plan-websites-<%= plan.id || 'new' %>">Website Generations</label>
+    <input id="plan-websites-<%= plan.id || 'new' %>" type="number" min="0" step="1" name="websiteGenerations" value="<%= plan.quotas?.websiteGenerations ?? 2 %>">
+  </div>
+
+  <div class="form-field" data-field="mobileAppGenerations">
+    <label for="plan-mobile-apps-<%= plan.id || 'new' %>">Mobile App Generations</label>
+    <input id="plan-mobile-apps-<%= plan.id || 'new' %>" type="number" min="0" step="1" name="mobileAppGenerations" value="<%= plan.quotas?.mobileAppGenerations ?? 0 %>">
+  </div>
+
+  <div class="form-field" data-field="socialPostGenerations">
+    <label for="plan-social-posts-<%= plan.id || 'new' %>">Social/Post Actions</label>
+    <input id="plan-social-posts-<%= plan.id || 'new' %>" type="number" min="0" step="1" name="socialPostGenerations" value="<%= plan.quotas?.socialPostGenerations ?? 10 %>">
+  </div>
+
+  <div class="form-field" data-field="businesses">
+    <label for="plan-businesses-<%= plan.id || 'new' %>">Businesses</label>
+    <input id="plan-businesses-<%= plan.id || 'new' %>" type="number" min="0" step="1" name="businesses" value="<%= plan.quotas?.businesses ?? 1 %>">
+  </div>
+
+  <div class="form-field" data-field="mcpKeys">
+    <label for="plan-mcp-keys-<%= plan.id || 'new' %>">MCP Keys</label>
+    <input id="plan-mcp-keys-<%= plan.id || 'new' %>" type="number" min="0" step="1" name="mcpKeys" value="<%= plan.quotas?.mcpKeys ?? 1 %>">
+  </div>
+
   <div class="form-field span-2" data-field="description">
     <label for="plan-description-<%= plan.id || 'new' %>">Description</label>
     <textarea id="plan-description-<%= plan.id || 'new' %>" name="description" rows="3"><%= plan.description %></textarea>

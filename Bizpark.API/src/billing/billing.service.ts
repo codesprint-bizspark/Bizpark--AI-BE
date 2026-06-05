@@ -1,11 +1,15 @@
 import { BadRequestException, ForbiddenException, Injectable, Logger } from '@nestjs/common';
 import { createHash, randomUUID } from 'node:crypto';
 import {
+    adminDb,
     applicationDb,
     DEFAULT_SUBSCRIPTION_PLANS,
+    normalizeSubscriptionPlanSettings,
+    SUBSCRIPTION_PLAN_SETTINGS_NAME,
     SubscriptionStatus,
     SubscriptionTier,
 } from 'bizpark.core';
+import { UsageService } from '../usage/usage.service';
 
 type CurrentUser = { id: string; email: string; name: string };
 
@@ -15,6 +19,8 @@ const md5Upper = (s: string) => md5(s).toUpperCase();
 @Injectable()
 export class BillingService {
     private readonly logger = new Logger(BillingService.name);
+
+    constructor(private readonly usageService: UsageService) {}
 
     private get merchantId() { return process.env.PAYHERE_MERCHANT_ID || ''; }
     private get merchantSecret() { return process.env.PAYHERE_MERCHANT_SECRET || ''; }
@@ -27,8 +33,17 @@ export class BillingService {
     private get apiBase() { return (process.env.PUBLIC_API_URL || 'http://localhost:3000').replace(/\/+$/, ''); }
     private get frontendBase() { return (process.env.FRONTEND_URL || 'http://localhost:9002').replace(/\/+$/, ''); }
 
-    private findPlan(planId: string) {
-        const plan = DEFAULT_SUBSCRIPTION_PLANS.find((p) => p.id === planId);
+    private async listPlans() {
+        const rows = await adminDb.template.findMany({
+            where: { name: { in: [SUBSCRIPTION_PLAN_SETTINGS_NAME] } },
+            orderBy: { createdAt: 'desc' },
+        });
+        return normalizeSubscriptionPlanSettings((rows[0] as { cmsSchema?: unknown } | undefined)?.cmsSchema).plans;
+    }
+
+    private async findPlan(planId: string) {
+        const plans = await this.listPlans();
+        const plan = plans.find((p) => p.id === planId) || DEFAULT_SUBSCRIPTION_PLANS.find((p) => p.id === planId);
         if (!plan) throw new BadRequestException(`Unknown plan: ${planId}`);
         return plan;
     }
@@ -50,7 +65,7 @@ export class BillingService {
             throw new BadRequestException('PayHere is not configured. Set PAYHERE_MERCHANT_ID and PAYHERE_MERCHANT_SECRET.');
         }
 
-        const plan = this.findPlan(planId);
+        const plan = await this.findPlan(planId);
         const orderId = `sub_${businessId.slice(0, 8)}_${Date.now()}`;
         const amount = Number(plan.priceMonthly).toFixed(2);
         const currency = plan.currency || 'USD';
@@ -60,6 +75,7 @@ export class BillingService {
             businessId,
             data: {
                 tier: plan.tier as SubscriptionTier,
+                planId: plan.id,
                 status: SubscriptionStatus.TRIALING, // pending until PayHere confirms
                 paymentProvider: 'payhere',
                 paymentReference: orderId,
@@ -138,7 +154,7 @@ export class BillingService {
             return { ok: false };
         }
 
-        const plan = DEFAULT_SUBSCRIPTION_PLANS.find((p) => p.id === planId);
+        const plan = planId ? await this.findPlan(planId).catch(() => null) : null;
         const now = new Date();
         const expires = new Date(now);
         expires.setMonth(expires.getMonth() + 1);
@@ -147,6 +163,7 @@ export class BillingService {
             businessId,
             data: {
                 tier: (plan?.tier as SubscriptionTier) ?? SubscriptionTier.PRO,
+                planId: plan?.id ?? planId ?? null,
                 status: SubscriptionStatus.ACTIVE,
                 startedAt: now,
                 expiresAt: expires,
@@ -162,16 +179,31 @@ export class BillingService {
     async getStatus(businessId: string, user: CurrentUser) {
         await this.assertAccess(businessId, user.id);
         const sub = await applicationDb.subscription.findLatestForBusiness({ businessId });
-        const plan = sub ? DEFAULT_SUBSCRIPTION_PLANS.find((p) => p.tier === sub.tier) : null;
+        const plans = await this.listPlans();
+        const plan = sub
+            ? plans.find((p) => p.id === sub.planId)
+                || plans.find((p) => p.tier === sub.tier)
+                || DEFAULT_SUBSCRIPTION_PLANS.find((p) => p.tier === sub.tier)
+            : null;
+        const usage = await this.usageService.getUsage(user.id);
         return {
             success: true,
             data: sub ? {
                 tier: sub.tier,
+                planId: sub.planId ?? plan?.id ?? null,
                 status: sub.status,
                 planName: plan?.name ?? sub.tier,
                 startedAt: sub.startedAt,
                 expiresAt: sub.expiresAt,
                 paymentProvider: sub.paymentProvider,
+                effectivePlan: usage.effectivePlan,
+                quotas: usage.quotas,
+                usageSummary: {
+                    month: usage.month,
+                    resetAt: usage.resetAt,
+                    usage: usage.usage,
+                    remaining: usage.remaining,
+                },
             } : null,
         };
     }

@@ -17,6 +17,8 @@ class Settings(BaseSettings):
     redis_port: int = 6379
 
     port: int = 3001
+    public_api_url: str = "http://localhost:3000"
+    api_internal_url: str = "http://localhost:3000"
     commerce_url: str = "http://localhost:3003"
     internal_api_key: str = ""
     openai_api_key: str = ""
@@ -31,4 +33,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-

@@ -76,6 +76,10 @@
         <% } %>
 
         <ul class="plan-feature-pills">
+          <li><%= Number(plan.quotas?.monthlyTokens ?? 0).toLocaleString() %> tokens</li>
+          <li><%= plan.quotas?.websiteGenerations ?? 0 %> websites</li>
+          <li><%= plan.quotas?.mobileAppGenerations ?? 0 %> apps</li>
+          <li><%= plan.quotas?.socialPostGenerations ?? 0 %> social actions</li>
           <% plan.benefits.slice(0, 4).forEach((benefit) => { %>
             <li><%= benefit %></li>
           <% }) %>
@@ -141,7 +145,15 @@
         benefits: [''],
         startsAt: '',
         endsAt: '',
-        timezone: 'UTC'
+        timezone: 'UTC',
+        quotas: {
+          monthlyTokens: 150000,
+          websiteGenerations: 3,
+          mobileAppGenerations: 0,
+          socialPostGenerations: 15,
+          businesses: 1,
+          mcpKeys: 2
+        }
       },
       planTypes,
       planStatuses,

@@ -6,7 +6,8 @@ import {
 } from '@nestjs/common';
 import { createHash, randomBytes } from 'crypto';
 import { Client } from 'pg';
-import { applicationDb } from 'bizpark.core';
+import { applicationDb, UserRole } from 'bizpark.core';
+import { UsageService } from '../usage/usage.service';
 
 type CurrentUser = { id: string; email: string; name: string };
 
@@ -41,6 +42,8 @@ async function withCommerceDb<T>(
 
 @Injectable()
 export class McpService implements OnModuleInit {
+  constructor(private readonly usageService: UsageService) {}
+
   async onModuleInit() {
     // Ensure the McpApiKey table exists in the Commerce DB on startup.
     await withCommerceDb(async (client) => {
@@ -94,6 +97,8 @@ export class McpService implements OnModuleInit {
     user: CurrentUser,
   ) {
     await this.assertAccess(businessId, user.id);
+    const activeKeyCount = await this.countActiveKeysForUser(user.id);
+    await this.usageService.assertCanCreateMcpKey(user.id, activeKeyCount);
 
     const raw = generateRawKey();
     const hash = hashKey(raw);
@@ -112,6 +117,25 @@ export class McpService implements OnModuleInit {
       success: true,
       data: { key: raw, keyPrefix, label: label ?? null },
     };
+  }
+
+  private async countActiveKeysForUser(userId: string) {
+    const businesses = await applicationDb.business.findMany({
+      where: { users: { some: { userId, role: UserRole.OWNER } } },
+    });
+    const businessIds = businesses.map((business) => business.id);
+    if (businessIds.length === 0) return 0;
+
+    return withCommerceDb(async (client) => {
+      const res = await client.query(
+        `SELECT COUNT(*)::int AS count
+                 FROM public."McpApiKey"
+                 WHERE "businessId" = ANY($1)
+                   AND "revokedAt" IS NULL`,
+        [businessIds],
+      );
+      return Number(res.rows[0]?.count ?? 0);
+    });
   }
 
   async revokeKey(keyId: string, businessId: string, user: CurrentUser) {

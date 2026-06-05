@@ -9,6 +9,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { AgentService } from '../agent/agent.service';
 import { MediaStorageService } from '../media/media-storage.service';
 import { randomBytes } from 'node:crypto';
+import { UsageService } from '../usage/usage.service';
 
 @Controller('api/business')
 @UseGuards(JwtAuthGuard)
@@ -17,10 +18,12 @@ export class BusinessController {
         private readonly businessService: BusinessService,
         private readonly agentService: AgentService,
         private readonly mediaStorage: MediaStorageService,
+        private readonly usageService: UsageService,
     ) { }
 
     @Post()
     async createBusiness(@Body() dto: CreateBusinessDto, @CurrentUser() user: { id: string; email: string; name: string }) {
+        await this.usageService.assertCanCreateBusiness(user.id);
         const business = await this.businessService.createBusiness(dto, user.id);
 
         // Provision Commerce schema + bootstrap admin account (best-effort, non-blocking)
@@ -186,6 +189,7 @@ export class BusinessController {
         const queuedTask = await this.agentService.queueTask({
             businessId: id,
             taskType: "WEBSITE_GENERATION",
+            createdByUserId: user.id,
             inputData: {
                 business: {
                     id: business.id,
@@ -256,6 +260,7 @@ export class BusinessController {
         const queuedTask = await this.agentService.queueTask({
             businessId: id,
             taskType: 'MOBILE_APP_GENERATION',
+            createdByUserId: user.id,
             inputData: {
                 business: {
                     id: business.id,
