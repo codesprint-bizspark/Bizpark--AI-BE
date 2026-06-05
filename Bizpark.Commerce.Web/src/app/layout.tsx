@@ -10,6 +10,12 @@ import type { WebsiteConfig } from '@/types';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
+// The storefront is per-tenant: the layout resolves the tenant from the request
+// (cookie / x-tenant-id header) and fetches that tenant's website config. It must
+// render per request — never statically prerendered at build time (which hangs on
+// the config fetch with no tenant context).
+export const dynamic = 'force-dynamic';
+
 async function getTenantFromCookie(): Promise<string | undefined> {
   try {
     const headersList = await headers();
