@@ -30,7 +30,17 @@ async function bootstrap() {
   }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
-  app.enableCors();
+  // Storefronts run on per-tenant subdomains (<slug>.bizspark.online) and call
+  // this API cross-origin with credentials, so reflect our own domains' origins
+  // (any bizspark.online / randitha.net subdomain + localhost) and allow creds.
+  app.enableCors({
+    origin: [
+      /^https:\/\/([a-z0-9-]+\.)*bizspark\.online$/,
+      /^https:\/\/([a-z0-9-]+\.)*randitha\.net$/,
+      /^http:\/\/localhost(:\d+)?$/,
+    ],
+    credentials: true,
+  });
   // Serve locally-stored uploads (dev fallback when Supabase Storage is unset)
   app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' });
   app.useGlobalPipes(
