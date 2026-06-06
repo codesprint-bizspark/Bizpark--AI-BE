@@ -252,7 +252,6 @@ export class InstagramClient implements PlatformClient {
                 caption: captionText,
             });
             containerId = String(body['id'] ?? '');
-            await this.waitContainer(containerId, accessToken);
         } else if (images.length > 1) {
             const children: string[] = [];
             for (const img of images) {
@@ -281,6 +280,10 @@ export class InstagramClient implements PlatformClient {
         }
 
         if (!containerId) throw new Error('Instagram media container creation failed — no id returned');
+
+        // Wait for the container (image / video / carousel) to finish processing.
+        // Publishing before it reaches FINISHED returns "Media ID is not available".
+        await this.waitContainer(containerId, accessToken);
 
         const pub = await this.igPost(`/${externalAccountId}/media_publish`, accessToken, { creation_id: containerId });
         const postId = String(pub['id'] ?? '');
