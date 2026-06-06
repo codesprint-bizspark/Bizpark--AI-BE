@@ -78,6 +78,8 @@
 
 > The merchant **SaaS dashboard** lives in a separate repo, [`BizSpark-AI---FE`](https://github.com/codesprint-bizspark/BizSpark-AI---FE).
 
+> **Per-tenant storefront subdomains:** a merchant claims a custom address in the dashboard (e.g. `olybella.bizspark.online`). The API validates/stores the slug (`businesses.slug`); a DNS-only wildcard `*.bizspark.online` + a Let's Encrypt wildcard cert mean **no per-record DNS is created** — the subdomain resolves instantly. `Bizpark.Commerce.Web` middleware resolves `<slug>` → tenant id via the public `GET /api/storefront/resolve/:slug` endpoint, then renders that tenant's store. The shared `store.bizspark.online/?tenant=<id>` host still works as a fallback.
+
 ## Prerequisites
 
 - Node.js 18+
