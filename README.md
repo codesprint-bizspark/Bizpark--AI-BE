@@ -244,7 +244,7 @@ All services share [`Bizpark.Core/.env`](./Bizpark.Core/.env.example)
 
 A standalone **Go** server that lets a merchant plug **their** store data into Claude (Desktop or Claude.ai web) over the Model Context Protocol. It reads the Commerce DB tenant schemas (products, orders, customers, revenue — read-only) and is multi-tenant isolated by per-business API keys (`McpApiKey`, auto-created in the Commerce DB).
 
-- **Claude Desktop:** HTTP+SSE transport — `mcp-remote https://admin.randitha.net/sse` + `Authorization: Bearer <biz_mcp_key>`.
+- **Claude Desktop:** HTTP+SSE transport — `mcp-remote https://admin.bizspark.online/sse` + `Authorization: Bearer <biz_mcp_key>`.
 - **Claude.ai web:** Streamable HTTP transport at `/mcp` + OAuth 2.0/PKCE (with a `?key=` fallback). Keys are generated in the dashboard → **AI Connect**.
 
 ```bash
